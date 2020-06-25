@@ -103,7 +103,7 @@ def defconfig():
                                 '9': 'testfile-20M' }
 
     # Generated testfiles
-    config['Testdata_Gen'] =  { 'srcFile': 'testfile-15M',
+    config['Testdata_Gen'] =  { 'srcFile': 'silesia-small.tar',
                                 '0': 500,
                                 '1': 300,
                                 '2': 150,

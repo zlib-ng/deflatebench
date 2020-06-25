@@ -1,8 +1,8 @@
 ## deflatebench -  a tool that can benchmark minigzip/minideflate
 
-* This tool must be run from the folder where an executable `minigzip` or `minideflate` exist.
-* Ex: `../deflatebench/deflatebench.py --gen`
-* You must provide the tool with testdata files.
+This tool must be run from the folder where an executable `minigzip` or `minideflate` exist.\
+Ex: `../deflatebench/deflatebench.py --gen`. (I suggest making a symlink to it though, for example in /usr/bin/)\
+You must provide the tool with testdata files.
 
 ### Config Files
 * `--write` parameter creates a new config file as ~/deflatebench.conf
@@ -33,3 +33,10 @@
   * Gen works by concatenating the source file multiple times until the asked for size is met or exceeded.
   * This works best with a relatively small input file. I use a 15MiB file, and let all levels get a generated size that is a multiple of 15MiB.
 * Please note that for best performance, the temp folder specified in the config [Default /tmp/] should be tmpfs or ramdisk.
+
+### Example Testdata
+As a convenience, I have created a couple uncompressed tar files that can be used for `single` and `gen` testmodes:
+* [202MiB full Silesia testcorpus](https://mirror.circlestorm.org/silesia.tar)
+* [15MiB custom cropped Silesia testcorpus](https://mirror.circlestorm.org/silesia-small.tar)
+
+The original source of this testcorpus is here: [Silesia](http://sun.aei.polsl.pl/~sdeor/index.php?page=silesia)
