@@ -1,73 +1,16 @@
-#!/usr/bin/python3 -OO
+#!/usr/bin/python3 -OOB
 import os, os.path
 import sys
 import re
 import math
+import toml
 import shlex
 import shutil
 import hashlib
+import argparse
 import subprocess
 from subprocess import PIPE
 from datetime import datetime, date, time, timedelta
-
-## Define some variables
-runs = 15
-trimcount = 5
-minlevel = 0
-maxlevel = 9
-
-start_delay = 0  # Milliseconds of startup to skip measuring, requires usleep(X*1000) in minigzip main()
-
-skipverify = False
-skipdecomp = False
-skipworst = True
-
-temp_path = "/tmp/"
-
-## CPU and measurement related settings
-use_chrt = True
-use_nosync = True
-use_perf = True
-use_turboctl = True
-use_cpupower = True
-
-cpu_minspeed = 1000
-cpu_maxspeed = 3600
-
-## Testfile definition
-use_single_testfile = False
-use_generated_testfiles = True  # Only valid if use_single_testfile == False
-
-# Single testfile
-single_testfile = '../silesia.tar'
-
-multi_testfiles = {
-    0: '../testfil-500M',
-    1: '../testfil-300M',
-    2: '../testfil-150M',
-    3: '../testfil-125M',
-    4: '../testfil-100M',
-    5: '../testfil-85M',
-    6: '../testfil-75M',
-    7: '../testfil-40M',
-    8: '../testfil-20M',
-    9: '../testfil-20M'
-}
-
-# Generated testfiles
-gen_testfilesrc = '../testfil-15M'
-gen_testsizes = {
-    0: 500,
-    1: 300,
-    2: 150,
-    3: 125,
-    4: 100,
-    5: 85,
-    6: 75,
-    7: 40,
-    8: 20,
-    9: 20,
-}
 
 BUF_SIZE = 1024*1024  # lets read stuff in 1MB chunks when hashing or copying
 
@@ -86,32 +29,117 @@ strip_ANSI_regex = re.compile(r"""
     [A-Za-z] # a letter
     """, re.VERBOSE).sub
 
-def cputweak(enable):
-    ''' Disable turbo, disable idlestates, and set fixed cpu mhz. Requires sudo rights. '''
-    # Turn off cpu turbo and power savings
-    if enable:
-        if use_turboctl:
-            runcommand('sudo /usr/bin/turboctl off', silent=1)
-        if use_cpupower:
-            runcommand(f'sudo /usr/bin/cpupower frequency-set -g performance -d {cpu_maxspeed*1000}', silent=1)
-            runcommand('sudo /usr/bin/cpupower idle-set -D 2', silent=1)
-
-    # Turn cpu turbo and power savings back on
-    if not enable:
-        if use_turboctl:
-            runcommand('sudo /usr/bin/turboctl on')
-        if use_cpupower:
-            runcommand(f'sudo /usr/bin/cpupower frequency-set -d {cpu_minspeed*1000}')
-            runcommand('sudo /usr/bin/cpupower idle-set -E')
-
 def get_len(s):
     ''' Return string length excluding ANSI escape strings '''
     return len(strip_ANSI_regex("", s))
+
+def resultstr(min, avg, max):
+    ''' Build result string '''
+    return f"{BLUE}{min:.3f}{RESET}/{GREEN}{avg:.3f}{RESET}/{RED}{max:.3f}{RESET}"
 
 def printnn(text):
     ''' Print without causing a newline '''
     sys.stdout.write(text)
     sys.stdout.flush()
+
+def defconfig():
+    ''' Define default config '''
+    config = dict()
+    config['Testruns'] = {  'runs': 15,
+                            'trimworst': 5,
+                            'minlevel': 0,
+                            'maxlevel': 9,
+                            'testmode': 'single' } # generate / multi / single
+
+    config['Config'] = {'temp_path': "/tmp/",
+                        'use_perf': True,
+                        'start_delay': 0,   # Milliseconds of startup to skip measuring, requires usleep(X*1000) in minigzip main()
+                        'skipverify': False,
+                        'skipdecomp': False }
+
+    ## CPU related settings
+    config['Tuning'] = {'use_chrt': True,
+                        'use_nosync': True,
+                        'use_turboctl': True,
+                        'use_cpupower': True,
+                        'cpu_minspeed': 1000,
+                        'cpu_maxspeed': 2000 }
+
+    # Single testfile
+    config['Testdata_Single'] = { 'testfile': 'silesia.tar' }
+
+    # Multiple testfiles
+    config['Testdata_Multi'] = {'0': 'testfile-500M',
+                                '1': 'testfile-300M',
+                                '2': 'testfile-150M',
+                                '3': 'testfile-125M',
+                                '4': 'testfile-100M',
+                                '5': 'testfile-85M',
+                                '6': 'testfile-75M',
+                                '7': 'testfile-40M',
+                                '8': 'testfile-20M',
+                                '9': 'testfile-20M' }
+
+    # Generated testfiles
+    config['Testdata_Gen'] =  { 'srcFile': 'testfile-15M',
+                                '0': 500,
+                                '1': 300,
+                                '2': 150,
+                                '3': 125,
+                                '4': 100,
+                                '5': 85,
+                                '6': 75,
+                                '7': 40,
+                                '8': 20,
+                                '9': 20 }
+    return config
+
+def parseconfig(file):
+    ''' Parse config file '''
+    config = toml.load(file)
+    return config
+
+def writeconfig(file):
+    ''' Write default config to file '''
+    config = defconfig()
+    with open(file, 'w') as f:
+        toml.dump(config,f)
+
+def cputweak(enable):
+    ''' Disable turbo, disable idlestates, and set fixed cpu mhz. Requires sudo rights. '''
+    # Turn off cpu turbo and power savings
+    if enable:
+        if cfgTuning['use_turboctl']:
+            runcommand('sudo /usr/bin/turboctl off', silent=1)
+        if cfgTuning['use_cpupower']:
+            runcommand(f"sudo /usr/bin/cpupower frequency-set -g performance -d {cfgTuning['cpu_maxspeed']*1000}", silent=1)
+            runcommand('sudo /usr/bin/cpupower idle-set -D 2', silent=1)
+
+    # Turn cpu turbo and power savings back on
+    if not enable:
+        if cfgTuning['use_turboctl']:
+            runcommand('sudo /usr/bin/turboctl on')
+        if cfgTuning['use_cpupower']:
+            runcommand(f"sudo /usr/bin/cpupower frequency-set -d {cfgTuning['cpu_minspeed']*1000}")
+            runcommand('sudo /usr/bin/cpupower idle-set -E')
+
+def findfile(filename,fatal=False):
+    ''' Search for filename in CWD, homedir and deflatebench.py-dir '''
+    filepath = os.path.dirname(os.path.realpath(__file__))
+    tmpCwd = os.path.join( os.getcwd(), filename)
+    tmpHome = os.path.join( os.path.expanduser("~"), filename)
+    tmpScript = os.path.join(filepath, filename)
+    if os.path.isfile(tmpCwd):
+        return os.path.realpath(tmpCwd)
+    elif os.path.isfile(tmpHome):
+        return os.path.realpath(tmpHome)
+    elif os.path.isfile(tmpScript):
+        return os.path.realpath(tmpScript)
+
+    if fatal:
+        print(f"Unable to find file: '{filename}'")
+        sys.exit(1)
+    return None
 
 def hashfile(file):
     ''' Calculate hash of file '''
@@ -152,33 +180,33 @@ def runcommand(command, env=None, stoponfail=1, silent=1, output='/dev/null'):
     else:
         retval = subprocess.call(args,env=env)
     if ((retval != 0) and (stoponfail != 0)):
-        sys.exit("Failed, retval(%s): %s" % (retval, command))
+        sys.exit(f"Failed, retval({retval}): {command}")
     return retval
 
 def get_env(bench=False):
     env = dict()
-    if bench and use_nosync:
+    if bench and cfgTuning['use_nosync']:
         env['LD_PRELOAD'] = '/usr/lib64/nosync/nosync.so'
     return env
 
 def command_prefix(timefile):
     ''' Build the benchmarking command prefix '''
-    if use_chrt:
+    if cfgTuning['use_chrt']:
         command = "/usr/bin/chrt -f 99"
     else:
         command = "/usr/bin/nice -n -20"
 
-    if use_perf:
-        command += " /usr/bin/perf stat -D %s -e cpu-clock:u -o '%s' -- " % (start_delay,timefile)
+    if cfgConfig['use_perf']:
+        command += f" /usr/bin/perf stat -D {cfgConfig['start_delay']} -e cpu-clock:u -o '{timefile}' -- "
     else:
         timeformat="%U"
-        command += " -20 /usr/bin/time -o %s -f '%s' -- " % (timefile,timeformat)
+        command += f" -20 /usr/bin/time -o {timefile} -f '{timeformalt}' -- "
 
     return command
 
 def parse_timefile(filen):
     ''' Parse output from perf or time '''
-    if use_perf:
+    if cfgConfig['use_perf']:
         with open(filen) as f:
             content = f.readlines()
         for line in content:
@@ -190,57 +218,48 @@ def parse_timefile(filen):
             content = f.readlines()
         return float(content[0])
 
-def resultstr(min, avg, max):
-    ''' Build result string '''
-    return f"{BLUE}{min:.3f}{RESET}/{GREEN}{avg:.3f}{RESET}/{RED}{max:.3f}{RESET}"
-
-def runtest(tempfiles,level,skipverify,skipdecomp):
-    ''' Run the tests for a compression level'''
-    timefile = '/tmp/zlib-time.tmp'
-    compfile = '/tmp/zlib-testfil.gz'
-    decompfile = '/tmp/zlib-testfil.raw'
-    hashfail = 0
-    decomptime = 0
-
-    file = tempfiles[level]['filename']
+def runtest(tempfiles,level):
+    ''' Run benchmark and tests for current compression level'''
+    hashfail, decomptime = 0,0
+    testfile = tempfiles[level]['filename']
     orighash = tempfiles[level]['hash']
 
     env = get_env(True)
     cmdprefix = command_prefix(timefile)
 
-    sys.stdout.write("Testing level %s: " % (level))
+    sys.stdout.write(f"Testing level {level}: ")
     runcommand('sync')
 
     # Compress
     printnn('c')
-    runcommand("%s ./minigzip -%s -c %s" % (cmdprefix,level,file), env=env, output=compfile)
+    runcommand(f"{cmdprefix} ./minigzip -{level} -c {testfile}", env=env, output=compfile)
     compsize = os.path.getsize(compfile)
 
     comptime = parse_timefile(timefile)
 
     # Decompress
-    if not skipdecomp or not skipverify:
+    if not cfgConfig['skipdecomp'] or not cfgConfig['skipverify']:
         printnn('d')
-        runcommand("%s ./minigzip -d -c %s" % (cmdprefix,compfile), env=env, output=decompfile)
+        runcommand(f"{cmdprefix} ./minigzip -d -c {compfile}", env=env, output=decompfile)
 
         decomptime = parse_timefile(timefile)
 
-        if not skipverify:
+        if not cfgConfig['skipverify']:
             ourhash = hashfile(decompfile)
             if ourhash != orighash:
-                print("%s != %s" % (orighash,ourhash))
+                print(f"{orighash} != {ourhash}")
                 hashfail = 1
 
         os.unlink(decompfile)
 
     # Validate using gunzip
-    if not skipverify:
+    if not cfgConfig['skipverify']:
         printnn('v')
-        runcommand("gunzip -c %s" % (compfile), output=decompfile)
+        runcommand(f"gunzip -c {compfile}", output=decompfile)
 
         gziphash = hashfile(decompfile)
         if gziphash != orighash:
-            print("%s != %s" % (orighash,gziphash))
+            print(f"{orighash} != {gziphash}")
             hashfail = 1
 
         os.unlink(decompfile)
@@ -248,7 +267,7 @@ def runtest(tempfiles,level,skipverify,skipdecomp):
     os.unlink(timefile)
     os.unlink(compfile)
 
-    printnn(" %.3f %.3f" % (comptime, decomptime))
+    printnn(f" {comptime:.3f} {decomptime:.3f}")
     printnn('\n')
 
     return compsize,comptime,decomptime,hashfail
@@ -256,7 +275,7 @@ def runtest(tempfiles,level,skipverify,skipdecomp):
 def trimworst(results):
     ''' Trim X worst results '''
     results.sort()
-    return results[:-trimcount]
+    return results[:-cfgRuns['trimworst']]
 
 def printreport(results, tempfiles):
     ''' Print results table '''
@@ -265,33 +284,37 @@ def printreport(results, tempfiles):
     totcomppct, totcomppct2 = [0]*2
     totcomptime, totcomptime2 = [0]*2
     totdecomptime, totdecomptime2 = [0]*2
-    numresults = runs - trimcount
+    runs = cfgRuns['runs']
+    numresults = runs - cfgRuns['trimworst']
 
-    numlevels = len(range(minlevel,maxlevel+1))
+    numlevels = len(range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1))
 
-    print("\n Runs: %s" % (runs))
-    print(" Levels: %s-%s" % (minlevel, maxlevel))
-    print(" Skipworst: %s (%s)" % (skipworst, trimcount))
+    # Print config info
+    print(f"\n Runs: {runs}")
+    print(f" Levels: {cfgRuns['minlevel']}-{cfgRuns['maxlevel']}")
+    print(f" Trimworst: {cfgRuns['trimworst']}")
 
-    if skipdecomp:
+    # Print header
+    if cfgConfig['skipdecomp']:
         print("\n Level   Comp   Comptime min/avg/max                          Compressed size")
     else:
         print("\n Level   Comp   Comptime min/avg/max  Decomptime min/avg/max  Compressed size")
 
-    for level in range(0,numlevels):
+    # Calculate and print stats per level
+    for level in map(str, range(0,numlevels)):
         ltotcomptime, ltotdecomptime = [0,0]
         origsize = tempfiles[level]['origsize']
 
-        # Find best/worst times for level
+        # Find best/worst times for this level
         compsize = None
         rawcomptimes = []
         rawdecomptimes = []
         for run in results:
-            rlevel,rsize,rcompt,rdecompt = run[level]
+            rlevel,rsize,rcompt,rdecompt = run[int(level)]
             rawcomptimes.append(rcompt)
             rawdecomptimes.append(rdecompt)
             if not compsize is None and compsize != rsize:
-                print("Warning: size changed between runs. Expected: %s Got: %s" % (compsize, rsize))
+                print(f"Warning: size changed between runs. Expected: {compsize} Got: {rsize}")
             else:
                 compsize = rsize
 
@@ -299,7 +322,7 @@ def printreport(results, tempfiles):
         comptimes = trimworst(rawcomptimes)
         decomptimes = trimworst(rawdecomptimes)
 
-        # Calculate min/max and sum per level
+        # Calculate min/max and sum for this level
         mincomptime = min(comptimes)
         mindecomptime = min(decomptimes)
 
@@ -329,14 +352,14 @@ def printreport(results, tempfiles):
 
         # Print level results
         compstr = resultstr(mincomptime, avgcomptime, maxcomptime)
-        if skipdecomp:
+        if cfgConfig['skipdecomp']:
             decompstr = ""
         else:
             decompstr = resultstr(mindecomptime, avgdecomptime, maxdecomptime)
         compstrpad = ' ' * (20 - get_len(compstr))
         decompstrpad = ' ' * (23 - get_len(decompstr))
 
-        print(" %-5s %7.3f%% %s%s %s%s  %s " % (rlevel,comppct,compstrpad,compstr,decompstrpad,decompstr,compsize))
+        print(f" {rlevel:5} {comppct:7.3f}% {compstrpad}{compstr} {decompstrpad}{decompstr}  {compsize} ")
 
     ### Totals
     # Compression
@@ -346,68 +369,74 @@ def printreport(results, tempfiles):
     avgcomptime2 = totcomptime2/((numlevels-1)*numresults)
 
     # Decompression
-    if skipdecomp:
+    if cfgConfig['skipdecomp']:
         avgdecomptime, avgdecompstr, totdecompstr = [''] * 3
         avgdecomptime2, avgdecompstr2, totdecompstr2 = [''] * 3
     else:
         avgdecomptime = totdecomptime/(numlevels*numresults)
-        avgdecompstr = "%.3f" % (avgdecomptime)
-        totdecompstr = "%.3f" % (totdecomptime)
-        if minlevel == 0:
+        avgdecompstr = f"{avgdecomptime:.3f}"
+        totdecompstr = f"{totdecomptime:.3f}"
+        if cfgRuns['minlevel'] == 0:
             avgdecomptime2 = totdecomptime2/((numlevels-1)*numresults)
-            avgdecompstr2 = "%.3f" % (avgdecomptime2)
-            totdecompstr2 = "%.3f" % (totdecomptime2)
+            avgdecompstr2 = f"{avgdecomptime2:.3f}"
+            totdecompstr2 = f"{totdecomptime2:.3f}"
 
-    print("\n %-5s %7.3f%% %20.3f %23s" % ('avg1',avgcomppct,avgcomptime,avgdecompstr))
-    if minlevel == 0:
-        print(" %-5s %7.3f%% %20.3f %23s  (lvl 0 excluded)" % ('avg2',avgcomppct2,avgcomptime2,avgdecompstr2))
-    print(" %-5s %8s %20.3f %23s" % ('tot','',totcomptime,totdecompstr))
+    # Print totals
+    print(f"\n {'avg1':5} {avgcomppct:7.3f}% {avgcomptime:20.3f} {avgdecompstr:>23}")
+    if cfgRuns['minlevel'] == 0:
+        print(f" {'avg2':5} {avgcomppct2:7.3f}% {avgcomptime2:20.3f} {avgdecompstr2:>23}")
+    print(f" {'tot':5} {'':8} {totcomptime:20.3f} {totdecompstr:>23}")
 
+def printfile(level,filename):
+    filesize = os.path.getsize(filename)
+    filesizeMB = filesize/1024/1024
+    print(f"Level {level}: {filename} {filesize/1024/1024:.1f} MiB / {filesize:,} B")
 
-def main():
-    global skipworst, skipverify, runs, trimcount
-    if len(sys.argv) >= 2:
-        runs = int(sys.argv[1])
-
-    if len(sys.argv) == 3:
-        trimcount = int(sys.argv[2])
-        skipworst = True
-
-    if skipworst and runs <= trimcount:
-        timcount = runs - 1
+def benchmain():
+    ''' Main benchmarking function '''
+    global timefile, compfile, decompfile
 
     # Prepare tempfiles
+    timefile = os.path.join(cfgConfig['temp_path'], 'zlib-time.tmp')
+    compfile = os.path.join(cfgConfig['temp_path'], 'zlib-testfil.gz')
+    decompfile = os.path.join(cfgConfig['temp_path'], 'zlib-testfil.raw')
+
     tempfiles = dict()
 
     # Single testfile, we just reference the same file for every level
-    if use_single_testfile:
-        tmp_filename = os.path.join(temp_path, f"deflatebench.tmp")
-        shutil.copyfile(single_testfile,tmp_filename)
+    if cfgRuns['testmode'] == 'single':
+        tmp_filename = os.path.join(cfgConfig['temp_path'], f"deflatebench.tmp")
+        srcfile = findfile(cfgSingle['testfile'])
+        shutil.copyfile(srcfile,tmp_filename)
         hash = hashfile(tmp_filename)
         origsize = os.path.getsize(tmp_filename)
-        print(f"Activated single file mode: {single_testfile} {origsize/1024/1024}MiB")
+        print(f"Activated single file mode")
+        printfile(f"{cfgRuns['minlevel']}-{cfgRuns['maxlevel']}", srcfile)
 
-        for level in range(minlevel,maxlevel+1):
+        for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
             tempfiles[level] = dict()
             tempfiles[level]['filename'] = tmp_filename
             tempfiles[level]['hash'] = hash
             tempfiles[level]['origsize'] = origsize
     else:
         # Multiple testfiles
-        if use_generated_testfiles:
-            print(f"Activated multiple generated file mode. Source: {gen_testfilesrc}")
-        else:
+        if cfgRuns['testmode'] == 'multi':
             print(f"Activated multiple file mode.")
+        else:
+            print(f"Activated multiple generated file mode. Source: {cfgGen['srcFile']}")
 
-        for level in range(minlevel,maxlevel+1):
+        for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
             tempfiles[level] = dict()
-            tmp_filename = os.path.join(temp_path, f"deflatebench-{level}.tmp")
+            tmp_filename = os.path.join(cfgConfig['temp_path'], f"deflatebench-{level}.tmp")
             tempfiles[level]['filename'] = tmp_filename
 
-            if use_generated_testfiles:
-                generate_testfile(gen_testfilesrc,tmp_filename,gen_testsizes[level])
+            if cfgRuns['testmode'] == 'multi':
+                srcfile = findfile(cfgMulti[level])
+                printfile(f"{level}", srcfile)
+                shutil.copyfile(srcfile,tmp_filename)
             else:
-                shutil.copyfile(multi_testfiles[level],tmp_filename)
+                printfile(f"{level}", tmp_filename)
+                generate_testfile(cfgGen['srcFile'],tmp_filename,cfgGen[level])
 
             tempfiles[level]['hash'] = hashfile(tmp_filename)
             tempfiles[level]['origsize'] = os.path.getsize(tmp_filename)
@@ -417,16 +446,16 @@ def main():
 
     # Run tests and record results
     results = []
-    for run in range(1,runs+1):
+    for run in range(1,cfgRuns['runs']+1):
         if run != 1:
-            skipverify = True
+            cfgConfig['skipverify'] = True
 
         temp = []
-        print("Starting run %s of %s" % (run,runs))
-        for level in range(minlevel,maxlevel+1):
-            compsize,comptime,decomptime,hashfail = runtest(tempfiles,level,skipverify,skipdecomp)
+        print(f"Starting run {run} of {cfgRuns['runs']}")
+        for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
+            compsize,comptime,decomptime,hashfail = runtest(tempfiles,level)
             if hashfail != 0:
-                print("ERROR: level %s failed crc checking" % (level))
+                print(f"ERROR: level {level} failed crc checking")
             temp.append( [level,compsize,comptime,decomptime] )
         results.append(temp)
 
@@ -436,7 +465,86 @@ def main():
     cputweak(False)
 
     # Clean up tempfiles
-    for level in range(minlevel,maxlevel+1):
-        os.unlink(tempfiles[level]['filename'])
+    for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
+        if os.path.isfile(tempfiles[level]['filename']):
+            os.unlink(tempfiles[level]['filename'])
 
+def main():
+    ''' Main function handles command-line arguments and loading the correct config '''
+    global homedir,cfgRuns,cfgConfig,cfgTuning,cfgGen,cfgSingle,cfgMulti
+
+    parser = argparse.ArgumentParser(description='deflatebench - A zlib-ng benchmarking utility')
+    parser.add_argument('-r','--runs', help='Number of benchmark runs.', type=int)
+    parser.add_argument('-t','--trimworst', help='Trim the N worst runs per level.', type=int)
+    parser.add_argument('-p','--profile', help='Load config profile from config file: ~/deflatebench-[PROFILE].conf', type=argparse.FileType('r'))
+    parser.add_argument('--write-config', help='Write default configfile to ~/deflatebench.conf.', action='store_true')
+    parser.add_argument('-s','--single', help='Activate testmode "Single"', action='store_true')
+    parser.add_argument('-m','--multi', help='Activate testmode "Multi".', action='store_true')
+    parser.add_argument('-g','--gen', help='Activate testmode "Generate".', action='store_true')
+    args = parser.parse_args()
+
+    defconfig_path = findfile('deflatebench.conf',fatal=False)
+
+    # Write default config file
+    if args.write_config:
+        if not defconfig_path:
+            defconfig_path = os.path.join( os.path.expanduser("~"), 'deflatebench.conf')
+            writeconfig(defconfig_path)
+        else:
+            print(f"ERROR: {defconfig_path} already exists, not overwriting.")
+        sys.exit(1)
+
+    # Load correct config file or fall back to internal defconfig()
+    if args.profile and not args.profile == 'default':
+        profilename = f"deflatebench-{args.profile}.conf"
+        profilefile = findfile(profilename)
+        cfg = parseconfig(profilefile)
+        print(f"Loaded config file '{profilefile}'.")
+    elif defconfig_path:
+        cfg = parseconfig(defconfig_path)
+        print(f"Loaded config file '{defconfig_path}'.")
+    else:
+        cfg = defconfig()
+        print("Loaded default config.")
+
+
+    # Split config into separate dicts
+    cfgRuns = cfg['Testruns']
+    cfgConfig = cfg['Config']
+    cfgTuning = cfg['Tuning']
+    cfgGen = cfg['Testdata_Gen']
+    cfgSingle = cfg['Testdata_Single']
+    cfgMulti = cfg['Testdata_Multi']
+
+    # Handle commandline parameters
+    if args.runs:
+        cfg['Testruns']['runs'] = args.runs
+
+    if args.trimworst:
+        cfg['Testruns']['trimworst'] = args.trimworst
+
+    if cfg['Testruns']['runs'] <= cfg['Testruns']['trimworst']:
+        print("Error, parameter 'runs' needs to be higher than parameter 'trimworst'")
+        sys.exit(1)
+
+    if args.single:
+        cfgRuns['testmode'] = 'single'
+        if args.multi or args.gen:
+            print("Error, parameter '--single' conflicts with parameters '--multi' and '--gen'")
+            sys.exit(1)
+
+    if args.multi:
+        cfgRuns['testmode'] = 'multi'
+        if args.single or args.gen:
+            print("Error, parameter '--multi' conflicts with parameters '--single' and '--gen'")
+            sys.exit(1)
+
+    if args.gen:
+        cfgRuns['testmode'] = 'gen'
+        if args.single or args.multi:
+            print("Error, parameter '--gen' conflicts with parameters '--single' and '--multi'")
+            sys.exit(1)
+
+    # Run main benchmarking function
+    benchmain()
 main()
