@@ -70,13 +70,14 @@ def defconfig():
                             'trimworst': 5,
                             'minlevel': 0,
                             'maxlevel': 9,
-                            'testmode': 'single' } # generate / multi / single
+                            'testmode': 'single',  # generate / multi / single
+                            'testtool': 'minigzip' } # minigzip / minideflate
 
     config['Config'] = {'temp_path': "/tmp/",
                         'use_perf': True,
-                        'start_delay': 0,   # Milliseconds of startup to skip measuring, requires usleep(X*1000) in minigzip main()
+                        'start_delay': 0,   # Milliseconds of startup to skip measuring, requires usleep(X*1000) in minigzip/minideflate main()
                         'skipverify': False,
-                        'skipdecomp': False }
+                        'skipdecomp': False}
 
     ## CPU related settings
     config['Tuning'] = {'use_chrt': True,
@@ -125,6 +126,22 @@ def writeconfig(file):
     config = defconfig()
     with open(file, 'w') as f:
         toml.dump(config,f)
+
+def mergeconfig(src, chg):
+    ''' Merge config settings from chg into src '''
+    if 'Testruns' in chg:
+        src['Testruns'].update(chg['Testruns'])
+    if 'Config' in chg:
+        src['Config'].update(chg['Config'])
+    if 'Tuning' in chg:
+        src['Tuning'].update(chg['Tuning'])
+    if 'Testdata_Gen' in chg:
+        src['Testdata_Gen'].update(chg['Testdata_Gen'])
+    if 'Testdata_Single' in chg:
+        src['Testdata_Single'].update(chg['Testdata_Single'])
+    if 'Testdata_Multi' in chg:
+        src['Testdata_Multi'].update(chg['Testdata_Multi'])
+    return src
 
 def cputweak(enable):
     ''' Disable turbo, disable idlestates, and set fixed cpu mhz. Requires sudo rights. '''
@@ -253,7 +270,7 @@ def runtest(tempfiles,level):
 
     # Compress
     printnn('c')
-    runcommand(f"{cmdprefix} ./minigzip -{level} -c {testfile}", env=env, output=compfile)
+    runcommand(f"{cmdprefix} ./{cfgRuns['testtool']} -{level} -c {testfile}", env=env, output=compfile)
     compsize = os.path.getsize(compfile)
 
     comptime = parse_timefile(timefile)
@@ -261,7 +278,7 @@ def runtest(tempfiles,level):
     # Decompress
     if not cfgConfig['skipdecomp'] or not cfgConfig['skipverify']:
         printnn('d')
-        runcommand(f"{cmdprefix} ./minigzip -d -c {compfile}", env=env, output=decompfile)
+        runcommand(f"{cmdprefix} ./{cfgRuns['testtool']} -d -c {compfile}", env=env, output=decompfile)
 
         decomptime = parse_timefile(timefile)
 
@@ -453,11 +470,11 @@ def benchmain():
 
             if cfgRuns['testmode'] == 'multi':
                 srcfile = findfile(cfgMulti[level])
-                printfile(f"{level}", srcfile)
                 shutil.copyfile(srcfile,tmp_filename)
+                printfile(f"{level}", srcfile)
             else:
-                printfile(f"{level}", tmp_filename)
                 generate_testfile(cfgGen['srcFile'],tmp_filename,cfgGen[level])
+                printfile(f"{level}", tmp_filename)
 
             tempfiles[level]['hash'] = hashfile(tmp_filename)
             tempfiles[level]['origsize'] = os.path.getsize(tmp_filename)
@@ -494,7 +511,7 @@ def main():
     ''' Main function handles command-line arguments and loading the correct config '''
     global homedir,cfgRuns,cfgConfig,cfgTuning,cfgGen,cfgSingle,cfgMulti
 
-    parser = argparse.ArgumentParser(description='deflatebench - A zlib-ng benchmarking utility')
+    parser = argparse.ArgumentParser(description='deflatebench - A zlib-ng benchmarking utility. Please see config file for more options.')
     parser.add_argument('-r','--runs', help='Number of benchmark runs.', type=int)
     parser.add_argument('-t','--trimworst', help='Trim the N worst runs per level.', type=int)
     parser.add_argument('-p','--profile', help='Load config profile from config file: ~/deflatebench-[PROFILE].conf', type=argparse.FileType('r'))
@@ -502,6 +519,10 @@ def main():
     parser.add_argument('-s','--single', help='Activate testmode "Single"', action='store_true')
     parser.add_argument('-m','--multi', help='Activate testmode "Multi".', action='store_true')
     parser.add_argument('-g','--gen', help='Activate testmode "Generate".', action='store_true')
+    parser.add_argument('-z','--minigzip', help='Use minigzip for testing.', action='store_true')
+    parser.add_argument('-d','--minideflate', help='Use minideflate for testing.', action='store_true')
+    parser.add_argument('--skipdecomp', help='Skip decompression benchmarks.', action='store_true')
+    parser.add_argument('--skipverify', help='Skip verifying compressed files with system gzip.', action='store_true')
     args = parser.parse_args()
 
     defconfig_path = findfile('deflatebench.conf',fatal=False)
@@ -515,19 +536,21 @@ def main():
             print(f"ERROR: {defconfig_path} already exists, not overwriting.")
         sys.exit(1)
 
-    # Load correct config file or fall back to internal defconfig()
+
+    # Load defconfig, then potentially override with values from config file
+    cfg = defconfig()
     if args.profile and not args.profile == 'default':
         profilename = f"deflatebench-{args.profile}.conf"
         profilefile = findfile(profilename)
-        cfg = parseconfig(profilefile)
+        cfgtmp = parseconfig(profilefile)
+        cfg = mergeconfig(cfg,cfgtmp)
         print(f"Loaded config file '{profilefile}'.")
     elif defconfig_path:
-        cfg = parseconfig(defconfig_path)
+        cfgtmp = parseconfig(defconfig_path)
+        cfg = mergeconfig(cfg,cfgtmp)
         print(f"Loaded config file '{defconfig_path}'.")
     else:
-        cfg = defconfig()
         print("Loaded default config.")
-
 
     # Split config into separate dicts
     cfgRuns = cfg['Testruns']
@@ -539,12 +562,12 @@ def main():
 
     # Handle commandline parameters
     if args.runs:
-        cfg['Testruns']['runs'] = args.runs
+        cfgRuns['runs'] = args.runs
 
     if args.trimworst:
-        cfg['Testruns']['trimworst'] = args.trimworst
+        cfgRuns['trimworst'] = args.trimworst
 
-    if cfg['Testruns']['runs'] <= cfg['Testruns']['trimworst']:
+    if cfgRuns['runs'] <= cfgRuns['trimworst']:
         print("Error, parameter 'runs' needs to be higher than parameter 'trimworst'")
         sys.exit(1)
 
@@ -565,6 +588,32 @@ def main():
         if args.single or args.multi:
             print("Error, parameter '--gen' conflicts with parameters '--single' and '--multi'")
             sys.exit(1)
+
+    if args.minigzip:
+        if args.minideflate:
+            print("Error, parameter '--minigzip' conflicts with parameter '--minideflate'")
+            sys.exit(1)
+        cfgRuns['testtool'] = 'minigzip'
+
+    if args.minideflate:
+        if args.minigzip:
+            print("Error, parameter '--minideflate' conflicts with parameter '--minigzip'")
+            sys.exit(1)
+        cfgRuns['testtool'] = 'minideflate'
+
+    if cfgRuns['testtool'] != 'minigzip' and cfgRuns['testtool'] != 'minideflate':
+        print("Error, config file spesifies invalid testtool. Valid choices are 'minigzip' and 'minideflate'.")
+        sys.exit(1)
+
+    if not os.path.isfile( os.path.join( os.getcwd(), cfgRuns['testtool']) ):
+        print(f"Error, unable to find '{cfgRuns['testtool']}' in current directory, did you forget to compile?")
+        sys.exit(1)
+
+    if args.skipdecomp:
+        cfgConfig['skipdecomp'] = True
+
+    if args.skipverify:
+        cfgConfig['skipverify'] = True
 
     # Run main benchmarking function
     benchmain()
