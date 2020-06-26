@@ -105,15 +105,15 @@ def defconfig():
     # Generated testfiles
     config['Testdata_Gen'] =  { 'srcFile': 'silesia-small.tar',
                                 '0': 500,
-                                '1': 300,
-                                '2': 150,
-                                '3': 125,
-                                '4': 100,
-                                '5': 85,
+                                '1': 270,
+                                '2': 135,
+                                '3': 105,
+                                '4': 90,
+                                '5': 90,
                                 '6': 75,
-                                '7': 40,
-                                '8': 20,
-                                '9': 20 }
+                                '7': 60,
+                                '8': 45,
+                                '9': 45 }
     return config
 
 def parseconfig(file):
@@ -161,7 +161,7 @@ def cputweak(enable):
             runcommand(f"sudo /usr/bin/cpupower frequency-set -d {cfgTuning['cpu_minspeed']*1000}")
             runcommand('sudo /usr/bin/cpupower idle-set -E')
 
-def findfile(filename,fatal=False):
+def findfile(filename,fatal=True):
     ''' Search for filename in CWD, homedir and deflatebench.py-dir '''
     filepath = os.path.dirname(os.path.realpath(__file__))
     tmpCwd = os.path.join( os.getcwd(), filename)
@@ -473,7 +473,7 @@ def benchmain():
                 shutil.copyfile(srcfile,tmp_filename)
                 printfile(f"{level}", srcfile)
             else:
-                generate_testfile(cfgGen['srcFile'],tmp_filename,cfgGen[level])
+                generate_testfile(findfile(cfgGen['srcFile']),tmp_filename,cfgGen[level])
                 printfile(f"{level}", tmp_filename)
 
             tempfiles[level]['hash'] = hashfile(tmp_filename)
@@ -541,7 +541,7 @@ def main():
     cfg = defconfig()
     if args.profile and not args.profile == 'default':
         profilename = f"deflatebench-{args.profile}.conf"
-        profilefile = findfile(profilename)
+        profilefile = findfile(profilename, fatal=True)
         cfgtmp = parseconfig(profilefile)
         cfg = mergeconfig(cfg,cfgtmp)
         print(f"Loaded config file '{profilefile}'.")
