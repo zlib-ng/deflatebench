@@ -1,0 +1,9 @@
+#!/usr/bin/sh
+if [ $1 == "off" ]; then
+    echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo
+fi
+
+if [ $1 == "on" ]; then
+    echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo
+fi
+

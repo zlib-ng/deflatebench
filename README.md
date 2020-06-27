@@ -12,12 +12,14 @@ You must provide the tool with testdata files.
 ### System Tuning
 <sub>PS: Several of these require root or sudo permissions</sub>
 * Supports `perf` or `time` for measuring cputime [Default perf]
-* Supports `chrt` to set real-time priority [Default ON]
-* Supports `nosync` library preloading [Default ON]
-* Supports `turboctl` for disabling cpu turbo while benchmarking [Default ON]
-* Supports `cpupower` for locking cpu speed and disabling powersaving while benchmarking [Default ON]
-  * `cpu_minspeed` configures normal minimal cpu speed in Mhz to reset back to after benchmark [Default 1000]
-  * `cpu_maxspeed` configure minimal cpu speed to use while benchmarking, should be same as cpu normal non-turbo max speed [Default 2000]
+* Supports `chrt` to set real-time priority [Default OFF]
+* Supports `nosync` library preloading [Default OFF]
+* Supports `turboctl` for disabling cpu turbo while benchmarking [Default OFF]
+  * `turboctl` script included in repo supports disabling turbo with `intel_pstate` cpu-governor, and should be copied do /usr/bin/turboctl and added to sudo config
+* Supports `cpupower` for locking cpu speed and disabling powersaving while benchmarking [Default OFF]
+  * `cpu_std_minspeed` configures normal minimal cpu speed in Mhz to reset back to after benchmark [Default 1000]
+  * `cpu_std_maxspeed` configures normal maxumum (non-Turbo) cpu speed in Mhz to reset back to after benchmark [Default 2200]
+  * `cpu_bench_speed` configure cpu speed to use while benchmarking, should be same as cpu normal non-turbo max speed or a little slower(200Mhz for example) [Default 2000]
 
 ### Test configuration
 * Specify number of testruns [Default 15]

@@ -80,12 +80,13 @@ def defconfig():
                         'skipdecomp': False}
 
     ## CPU related settings
-    config['Tuning'] = {'use_chrt': True,
-                        'use_nosync': True,
-                        'use_turboctl': True,
-                        'use_cpupower': True,
-                        'cpu_minspeed': 1000,
-                        'cpu_maxspeed': 2000 }
+    config['Tuning'] = {'use_chrt': False,
+                        'use_nosync': False,
+                        'use_turboctl': False,
+                        'use_cpupower': False,
+                        'cpu_std_minspeed': 1000,
+                        'cpu_std_maxspeed': 2200,
+                        'cpu_bench_speed': 2000 }
 
     # Single testfile
     config['Testdata_Single'] = { 'testfile': 'silesia.tar' }
@@ -150,7 +151,7 @@ def cputweak(enable):
         if cfgTuning['use_turboctl']:
             runcommand('sudo /usr/bin/turboctl off', silent=1)
         if cfgTuning['use_cpupower']:
-            runcommand(f"sudo /usr/bin/cpupower frequency-set -g performance -d {cfgTuning['cpu_maxspeed']*1000}", silent=1)
+            runcommand(f"sudo /usr/bin/cpupower frequency-set -g performance --min {cfgTuning['cpu_bench_speed']*1000} --max {cfgTuning['cpu_bench_speed']*1000}", silent=1)
             runcommand('sudo /usr/bin/cpupower idle-set -D 2', silent=1)
 
     # Turn cpu turbo and power savings back on
@@ -158,7 +159,7 @@ def cputweak(enable):
         if cfgTuning['use_turboctl']:
             runcommand('sudo /usr/bin/turboctl on')
         if cfgTuning['use_cpupower']:
-            runcommand(f"sudo /usr/bin/cpupower frequency-set -d {cfgTuning['cpu_minspeed']*1000}")
+            runcommand(f"sudo /usr/bin/cpupower frequency-set --min {cfgTuning['cpu_std_minspeed']*1000} --max {cfgTuning['cpu_std_maxspeed']*1000}")
             runcommand('sudo /usr/bin/cpupower idle-set -E')
 
 def findfile(filename,fatal=True):
