@@ -339,7 +339,7 @@ def printreport(results, tempfiles):
         print("\n Level   Comp   Comptime min/avg/max  Decomptime min/avg/max  Compressed size")
 
     # Calculate and print stats per level
-    for level in map(str, range(0,numlevels)):
+    for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
         ltotcomptime, ltotdecomptime = [0,0]
         origsize = tempfiles[level]['origsize']
 
@@ -347,8 +347,8 @@ def printreport(results, tempfiles):
         compsize = None
         rawcomptimes = []
         rawdecomptimes = []
-        for run in results:
-            rlevel,rsize,rcompt,rdecompt = run[int(level)]
+        for run in results[level]:
+            rsize,rcompt,rdecompt = run
             rawcomptimes.append(rcompt)
             rawdecomptimes.append(rdecompt)
             if not compsize is None and compsize != rsize:
@@ -397,7 +397,7 @@ def printreport(results, tempfiles):
         compstrpad = ' ' * (20 - get_len(compstr))
         decompstrpad = ' ' * (23 - get_len(decompstr))
 
-        print(f" {rlevel:5} {comppct:7.3f}% {compstrpad}{compstr} {decompstrpad}{decompstr}  {compsize} ")
+        print(f" {level:5} {comppct:7.3f}% {compstrpad}{compstr} {decompstrpad}{decompstr}  {compsize} ")
 
     ### Totals
     # Compression
@@ -482,8 +482,12 @@ def benchmain():
     # Tweak system to reduce benchmark variance
     cputweak(True)
 
+    # Prepare multilevel results array
+    results = dict()
+    for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
+        results[level] = []
+
     # Run tests and record results
-    results = []
     for run in range(1,cfgRuns['runs']+1):
         if run != 1:
             cfgConfig['skipverify'] = True
@@ -494,8 +498,7 @@ def benchmain():
             compsize,comptime,decomptime,hashfail = runtest(tempfiles,level)
             if hashfail != 0:
                 print(f"ERROR: level {level} failed crc checking")
-            temp.append( [level,compsize,comptime,decomptime] )
-        results.append(temp)
+            results[level].append( [compsize,comptime,decomptime] )
 
     printreport(results, tempfiles)
 
