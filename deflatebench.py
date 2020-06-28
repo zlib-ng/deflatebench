@@ -210,7 +210,6 @@ def generate_testfile(sourcefile,destfile,minsize):
 
 def runcommand(command, env=None, stoponfail=1, silent=1, output='/dev/null'):
     ''' Run command, and handle special cases '''
-    errout = ""
     args = shlex.split(command)
     if (silent == 1):
         devnull = open(output, 'w')
@@ -239,7 +238,7 @@ def command_prefix(timefile):
         command += f" /usr/bin/perf stat -D {cfgConfig['start_delay']} -e cpu-clock:u -o '{timefile}' -- "
     else:
         timeformat="%U"
-        command += f" -20 /usr/bin/time -o {timefile} -f '{timeformalt}' -- "
+        command += f" -20 /usr/bin/time -o {timefile} -f '{timeformat}' -- "
 
     return command
 
@@ -428,7 +427,6 @@ def printreport(results, tempfiles):
 
 def printfile(level,filename):
     filesize = os.path.getsize(filename)
-    filesizeMB = filesize/1024/1024
     print(f"Level {level}: {filename} {filesize/1024/1024:.1f} MiB / {filesize:,} B")
 
 def benchmain():
@@ -447,7 +445,7 @@ def benchmain():
         tmp_filename = os.path.join(cfgConfig['temp_path'], f"deflatebench.tmp")
         srcfile = findfile(cfgSingle['testfile'])
         shutil.copyfile(srcfile,tmp_filename)
-        hash = hashfile(tmp_filename)
+        tmp_hash = hashfile(tmp_filename)
         origsize = os.path.getsize(tmp_filename)
         print(f"Activated single file mode")
         printfile(f"{cfgRuns['minlevel']}-{cfgRuns['maxlevel']}", srcfile)
@@ -455,7 +453,7 @@ def benchmain():
         for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
             tempfiles[level] = dict()
             tempfiles[level]['filename'] = tmp_filename
-            tempfiles[level]['hash'] = hash
+            tempfiles[level]['hash'] = tmp_hash
             tempfiles[level]['origsize'] = origsize
     else:
         # Multiple testfiles
@@ -493,7 +491,6 @@ def benchmain():
         if run != 1:
             cfgConfig['skipverify'] = True
 
-        temp = []
         print(f"Starting run {run} of {cfgRuns['runs']}")
         for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
             compsize,comptime,decomptime,hashfail = runtest(tempfiles,level)
