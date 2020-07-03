@@ -25,13 +25,14 @@ import sys
 import re
 import math
 import toml
+import time
 import shlex
 import shutil
 import hashlib
 import argparse
 import subprocess
 from subprocess import PIPE
-from datetime import datetime, date, time, timedelta
+from datetime import datetime, date, timedelta
 
 BUF_SIZE = 1024*1024  # lets read stuff in 1MB chunks when hashing or copying
 
@@ -146,6 +147,8 @@ def mergeconfig(src, chg):
 
 def cputweak(enable):
     ''' Disable turbo, disable idlestates, and set fixed cpu mhz. Requires sudo rights. '''
+    if sys.platform == 'win32':
+        return
     # Turn off cpu turbo and power savings
     if enable:
         if cfgTuning['use_turboctl']:
@@ -208,12 +211,12 @@ def generate_testfile(sourcefile,destfile,minsize):
             dst.write(data)
     dst.close()
 
-def runcommand(command, env=None, stoponfail=1, silent=1, output='/dev/null'):
+def runcommand(command, env=None, stoponfail=1, silent=1, output=os.devnull):
     ''' Run command, and handle special cases '''
     args = shlex.split(command)
     if (silent == 1):
         devnull = open(output, 'w')
-        retval = subprocess.call(args,env=env,stdout=devnull)
+        retval = subprocess.call(args,stdout=devnull)
         devnull.close()
     else:
         retval = subprocess.call(args,env=env)
@@ -227,35 +230,6 @@ def get_env(bench=False):
         env['LD_PRELOAD'] = '/usr/lib64/nosync/nosync.so'
     return env
 
-def command_prefix(timefile):
-    ''' Build the benchmarking command prefix '''
-    if cfgTuning['use_chrt']:
-        command = "/usr/bin/chrt -f 99"
-    else:
-        command = "/usr/bin/nice -n -20"
-
-    if cfgConfig['use_perf']:
-        command += f" /usr/bin/perf stat -D {cfgConfig['start_delay']} -e cpu-clock:u -o '{timefile}' -- "
-    else:
-        timeformat="%U"
-        command += f" -20 /usr/bin/time -o {timefile} -f '{timeformat}' -- "
-
-    return command
-
-def parse_timefile(filen):
-    ''' Parse output from perf or time '''
-    if cfgConfig['use_perf']:
-        with open(filen) as f:
-            content = f.readlines()
-        for line in content:
-            if line[-13:-1] == 'seconds user':
-                return float(line[:-13])
-        return 0.0
-    else:
-        with open(filen) as f:
-            content = f.readlines()
-        return float(content[0])
-
 def runtest(tempfiles,level):
     ''' Run benchmark and tests for current compression level'''
     hashfail, decomptime = 0,0
@@ -263,24 +237,26 @@ def runtest(tempfiles,level):
     orighash = tempfiles[level]['hash']
 
     env = get_env(True)
-    cmdprefix = command_prefix(timefile)
 
     sys.stdout.write(f"Testing level {level}: ")
-    runcommand('sync')
+    if sys.platform != 'win32':
+        runcommand('sync')
 
     # Compress
     printnn('c')
-    runcommand(f"{cmdprefix} ./{cfgRuns['testtool']} -{level} -c {testfile}", env=env, output=compfile)
-    compsize = os.path.getsize(compfile)
 
-    comptime = parse_timefile(timefile)
+    starttime = time.perf_counter()
+    runcommand(f"./{cfgRuns['testtool']} -{level} -c {testfile}", env=env, output=compfile)
+    comptime = time.perf_counter() - starttime
+
+    compsize = os.path.getsize(compfile)
 
     # Decompress
     if not cfgConfig['skipdecomp'] or not cfgConfig['skipverify']:
         printnn('d')
-        runcommand(f"{cmdprefix} ./{cfgRuns['testtool']} -d -c {compfile}", env=env, output=decompfile)
-
-        decomptime = parse_timefile(timefile)
+        starttime = time.perf_counter()
+        runcommand(f"./{cfgRuns['testtool']} -d -c {compfile}", env=env, output=decompfile)
+        decomptime = time.perf_counter() - starttime
 
         if not cfgConfig['skipverify']:
             ourhash = hashfile(decompfile)
@@ -302,7 +278,6 @@ def runtest(tempfiles,level):
 
         os.unlink(decompfile)
 
-    os.unlink(timefile)
     os.unlink(compfile)
 
     printnn(f" {comptime:.3f} {decomptime:.3f}")
@@ -431,10 +406,9 @@ def printfile(level,filename):
 
 def benchmain():
     ''' Main benchmarking function '''
-    global timefile, compfile, decompfile
+    global compfile, decompfile
 
     # Prepare tempfiles
-    timefile = os.path.join(cfgConfig['temp_path'], 'zlib-time.tmp')
     compfile = os.path.join(cfgConfig['temp_path'], 'zlib-testfil.gz')
     decompfile = os.path.join(cfgConfig['temp_path'], 'zlib-testfil.raw')
 
@@ -605,6 +579,9 @@ def main():
     if cfgRuns['testtool'] != 'minigzip' and cfgRuns['testtool'] != 'minideflate':
         print("Error, config file spesifies invalid testtool. Valid choices are 'minigzip' and 'minideflate'.")
         sys.exit(1)
+
+    if sys.platform == 'win32':
+        cfgRuns['testtool'] += '.exe'
 
     if not os.path.isfile( os.path.join( os.getcwd(), cfgRuns['testtool']) ):
         print(f"Error, unable to find '{cfgRuns['testtool']}' in current directory, did you forget to compile?")
