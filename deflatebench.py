@@ -605,7 +605,7 @@ def main():
             sys.exit(1)
         cfgRuns['testtool'] = 'minideflate'
 
-    if cfgRuns['testtool'] != 'minigzip' and cfgRuns['testtool'] != 'minideflate':
+    if 'minigzip' not in cfgRuns['testtool'] and 'minideflate' not in cfgRuns['testtool']:
         print("Error, config file spesifies invalid testtool. Valid choices are 'minigzip' and 'minideflate'.")
         sys.exit(1)
 
