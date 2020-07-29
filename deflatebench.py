@@ -208,7 +208,7 @@ def generate_testfile(sourcefile,destfile,minsize):
             dst.write(data)
     dst.close()
 
-def runcommand(command, env=None, stoponfail=1, silent=1, output='/dev/null'):
+def runcommand(command, env=None, stoponfail=1, silent=1, output=os.devnull):
     ''' Run command, and handle special cases '''
     args = shlex.split(command)
     if (silent == 1):
