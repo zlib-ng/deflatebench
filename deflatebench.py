@@ -313,6 +313,8 @@ def runtest(tempfiles,level):
 def trimworst(results):
     ''' Trim X worst results '''
     results.sort()
+    if cfgRuns['trimworst'] == 0:
+        return results
     return results[:-cfgRuns['trimworst']]
 
 def printreport(results, tempfiles):
