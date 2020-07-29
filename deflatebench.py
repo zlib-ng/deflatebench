@@ -266,7 +266,8 @@ def runtest(tempfiles,level):
     cmdprefix = command_prefix(timefile)
 
     sys.stdout.write(f"Testing level {level}: ")
-    runcommand('sync')
+     if sys.platform != 'win32':
+        runcommand('sync')
 
     # Compress
     printnn('c')
