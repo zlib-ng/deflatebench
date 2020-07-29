@@ -24,6 +24,7 @@ import os, os.path
 import sys
 import re
 import math
+import tempfile
 import time
 import toml
 import shlex
@@ -74,7 +75,7 @@ def defconfig():
                             'testmode': 'single',  # generate / multi / single
                             'testtool': 'minigzip' } # minigzip / minideflate
 
-    config['Config'] = {'temp_path': "/tmp/",
+    config['Config'] = {'temp_path': tempfile.gettempdir(),
                         'use_perf': True,
                         'start_delay': 0,   # Milliseconds of startup to skip measuring, requires usleep(X*1000) in minigzip/minideflate main()
                         'skipverify': False,
@@ -211,7 +212,7 @@ def generate_testfile(sourcefile,destfile,minsize):
 
 def runcommand(command, env=None, stoponfail=1, silent=1, output=os.devnull):
     ''' Run command, and handle special cases '''
-    args = shlex.split(command)
+    args = shlex.split(command, posix=sys.platform != 'win32')
     if (silent == 1):
         devnull = open(output, 'w')
         retval = subprocess.call(args,env=env,stdout=devnull)
