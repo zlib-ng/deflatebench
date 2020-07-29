@@ -24,6 +24,7 @@ import os, os.path
 import sys
 import re
 import math
+import time
 import toml
 import shlex
 import shutil
@@ -31,7 +32,7 @@ import hashlib
 import argparse
 import subprocess
 from subprocess import PIPE
-from datetime import datetime, date, time, timedelta
+from datetime import datetime, date, timedelta
 
 BUF_SIZE = 1024*1024  # lets read stuff in 1MB chunks when hashing or copying
 
@@ -261,27 +262,35 @@ def runtest(tempfiles,level):
     hashfail, decomptime = 0,0
     testfile = tempfiles[level]['filename']
     orighash = tempfiles[level]['hash']
+    cmdprefix = ''
 
     env = get_env(True)
-    cmdprefix = command_prefix(timefile)
 
     sys.stdout.write(f"Testing level {level}: ")
-     if sys.platform != 'win32':
+    if sys.platform != 'win32':
+        cmdprefix = command_prefix(timefile)
         runcommand('sync')
 
     # Compress
     printnn('c')
+    starttime = time.perf_counter()
     runcommand(f"{cmdprefix} ./{cfgRuns['testtool']} -{level} -c {testfile}", env=env, output=compfile)
+    if sys.platform != 'win32':
+        comptime = parse_timefile(timefile)
+    else:
+        comptime = time.perf_counter() - starttime
     compsize = os.path.getsize(compfile)
-
-    comptime = parse_timefile(timefile)
 
     # Decompress
     if not cfgConfig['skipdecomp'] or not cfgConfig['skipverify']:
         printnn('d')
+        starttime = time.perf_counter()
         runcommand(f"{cmdprefix} ./{cfgRuns['testtool']} -d -c {compfile}", env=env, output=decompfile)
 
-        decomptime = parse_timefile(timefile)
+        if sys.platform != 'win32':
+            decomptime = parse_timefile(timefile)
+        else:
+            decomptime = time.perf_counter() - starttime
 
         if not cfgConfig['skipverify']:
             ourhash = hashfile(decompfile)
@@ -303,7 +312,8 @@ def runtest(tempfiles,level):
 
         os.unlink(decompfile)
 
-    os.unlink(timefile)
+    if os.path.exists(timefile):
+        os.unlink(timefile)
     os.unlink(compfile)
 
     printnn(f" {comptime:.3f} {decomptime:.3f}")
