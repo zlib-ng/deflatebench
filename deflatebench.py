@@ -213,12 +213,15 @@ def generate_testfile(sourcefile,destfile,minsize):
 def runcommand(command, env=None, stoponfail=1, silent=1, output=os.devnull):
     ''' Run command, and handle special cases '''
     args = shlex.split(command, posix=sys.platform != 'win32')
+    sp_args = {}
+    if (sys.platform == 'win32'):
+        sp_args['creationflags'] = subprocess.HIGH_PRIORITY_CLASS
     if (silent == 1):
         devnull = open(output, 'w')
-        retval = subprocess.call(args,env=env,stdout=devnull)
+        retval = subprocess.call(args,env=env,stdout=devnull,**sp_args)
         devnull.close()
     else:
-        retval = subprocess.call(args,env=env)
+        retval = subprocess.call(args,env=env,**sp_args)
     if ((retval != 0) and (stoponfail != 0)):
         sys.exit(f"Failed, retval({retval}): {command}")
     return retval
