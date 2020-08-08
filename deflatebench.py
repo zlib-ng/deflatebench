@@ -275,7 +275,9 @@ def runtest(tempfiles,level):
     # Compress
     printnn('c')
     starttime = time.perf_counter()
-    runcommand(f"{cmdprefix} ./{cfgRuns['testtool']} -{level} -c {testfile}", env=env, output=compfile)
+    testtool = os.path.realpath(cfgRuns['testtool'])
+
+    runcommand(f"{cmdprefix} {testtool} -{level} -c {testfile}", env=env, output=compfile)
     if sys.platform != 'win32':
         comptime = parse_timefile(timefile)
     else:
@@ -286,7 +288,7 @@ def runtest(tempfiles,level):
     if not cfgConfig['skipdecomp'] or not cfgConfig['skipverify']:
         printnn('d')
         starttime = time.perf_counter()
-        runcommand(f"{cmdprefix} ./{cfgRuns['testtool']} -d -c {compfile}", env=env, output=decompfile)
+        runcommand(f"{cmdprefix} {testtool} -d -c {compfile}", env=env, output=decompfile)
 
         if sys.platform != 'win32':
             decomptime = parse_timefile(timefile)
