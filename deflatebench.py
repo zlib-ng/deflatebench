@@ -322,7 +322,7 @@ def runtest(tempfiles,level):
         os.unlink(timefile)
     os.unlink(compfile)
 
-    printnn(f" {comptime:.3f} {decomptime:.3f}")
+    printnn(f" {comptime:7.3f} {decomptime:7.3f} {compsize}")
     printnn('\n')
 
     return compsize,comptime,decomptime,hashfail
