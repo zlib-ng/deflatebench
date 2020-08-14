@@ -354,7 +354,9 @@ def printreport(results, tempfiles):
     numlevels = len(range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1))
 
     # Print config info
-    print(f"\n Runs: {runs}")
+    print(f"\n")
+    print(f" Tool: {cfgRuns['testtool']}")
+    print(f" Runs: {runs}")
     print(f" Levels: {cfgRuns['minlevel']}-{cfgRuns['maxlevel']}")
     print(f" Trimworst: {cfgRuns['trimworst']}")
 
@@ -465,6 +467,8 @@ def printfile(level,filename):
 def benchmain():
     ''' Main benchmarking function '''
     global timefile, compfile, decompfile
+
+    print(f"Tool: {cfgRuns['testtool']}")
 
     # Prepare tempfiles
     timefile = os.path.join(cfgConfig['temp_path'], 'zlib-time.tmp')
