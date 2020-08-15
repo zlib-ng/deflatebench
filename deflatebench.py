@@ -404,9 +404,10 @@ def printreport(results, tempfiles):
     ### Totals
     # Compression
     avgcomppct = totcomppct/numlevels
-    avgcomppct2 = totcomppct2/(numlevels-1)
     avgcomptime = totcomptime/(numlevels*numresults)
-    avgcomptime2 = totcomptime2/((numlevels-1)*numresults)
+    if cfgRuns['minlevel'] == 0:
+        avgcomppct2 = totcomppct2/(numlevels-1)
+        avgcomptime2 = totcomptime2/((numlevels-1)*numresults)
 
     # Decompression
     if cfgConfig['skipdecomp']:
