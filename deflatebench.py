@@ -517,7 +517,7 @@ def main():
     parser = argparse.ArgumentParser(description='deflatebench - A zlib-ng benchmarking utility. Please see config file for more options.')
     parser.add_argument('-r','--runs', help='Number of benchmark runs.', type=int)
     parser.add_argument('-t','--trimworst', help='Trim the N worst runs per level.', type=int)
-    parser.add_argument('-p','--profile', help='Load config profile from config file: ~/deflatebench-[PROFILE].conf', type=argparse.FileType('r'))
+    parser.add_argument('-p','--profile', help='Load config profile from config file: ~/deflatebench-[PROFILE].conf')
     parser.add_argument('--write-config', help='Write default configfile to ~/deflatebench.conf.', action='store_true')
     parser.add_argument('-s','--single', help='Activate testmode "Single"', action='store_true')
     parser.add_argument('-m','--multi', help='Activate testmode "Multi".', action='store_true')
