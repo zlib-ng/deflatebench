@@ -330,7 +330,7 @@ def runtest(tempfiles,level):
 def trimworst(results):
     ''' Trim X worst results '''
     results.sort()
-    if cfgRuns['trimworst'] == 0:
+    if not cfgRuns['trimworst']:
         return results
     return results[:-cfgRuns['trimworst']]
 
@@ -582,14 +582,14 @@ def main():
     cfgMulti = cfg['Testdata_Multi']
 
     # Handle commandline parameters
-    if args.runs:
+    if args.runs is not None:
         cfgRuns['runs'] = args.runs
 
-    if args.trimworst:
+    if args.trimworst is not None:
         cfgRuns['trimworst'] = args.trimworst
 
     if cfgRuns['runs'] <= cfgRuns['trimworst']:
-        print("Error, parameter 'runs' needs to be higher than parameter 'trimworst'")
+        print(f"Error, parameter 'runs={cfgRuns['runs']}' needs to be higher than parameter 'trimworst={cfgRuns['trimworst']}'")
         sys.exit(1)
 
     if args.single:
