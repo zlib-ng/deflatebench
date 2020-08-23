@@ -32,6 +32,7 @@ import shutil
 import hashlib
 import argparse
 import subprocess
+import statistics
 from subprocess import PIPE
 from datetime import datetime, date, timedelta
 
@@ -56,9 +57,12 @@ def get_len(s):
     ''' Return string length excluding ANSI escape strings '''
     return len(strip_ANSI_regex("", s))
 
-def resultstr(min, avg, max):
+def resultstr(result):
     ''' Build result string '''
-    return f"{BLUE}{min:.3f}{RESET}/{GREEN}{avg:.3f}{RESET}/{RED}{max:.3f}{RESET}"
+    return ( f"{BLUE}{result['mintime']:.3f}{RESET}"
+             f"/{GREEN}{result['avgtime']:.3f}{RESET}"
+             f"/{RED}{result['maxtime']:.3f}{RESET}"
+             f"/{BRIGHT}{result['stddev']:.3f}{RESET}" )
 
 def printnn(text):
     ''' Print without causing a newline '''
@@ -322,7 +326,8 @@ def runtest(tempfiles,level):
         os.unlink(timefile)
     os.unlink(compfile)
 
-    printnn(f" {comptime:7.3f} {decomptime:7.3f} {compsize}")
+    comppct = float(compsize*100)/tempfiles[level]['origsize']
+    printnn(f" {comptime:7.3f} {decomptime:7.3f} {compsize} {comppct:3.3f}%")
     printnn('\n')
 
     return compsize,comptime,decomptime,hashfail
@@ -353,14 +358,15 @@ def printreport(results, tempfiles):
 
     # Print header
     if cfgConfig['skipdecomp']:
-        print("\n Level   Comp   Comptime min/avg/max                          Compressed size")
+        print("\n Level   Comp   Comptime min/avg/max/stddev                          Compressed size")
     else:
-        print("\n Level   Comp   Comptime min/avg/max  Decomptime min/avg/max  Compressed size")
+        print("\n Level   Comp   Comptime min/avg/max/stddev  Decomptime min/avg/max/stddev  Compressed size")
 
     # Calculate and print stats per level
     for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
         ltotcomptime, ltotdecomptime = [0,0]
         origsize = tempfiles[level]['origsize']
+        comp, decomp = dict(), dict()
 
         # Find best/worst times for this level
         compsize = None
@@ -379,44 +385,52 @@ def printreport(results, tempfiles):
         comptimes = trimworst(rawcomptimes)
         decomptimes = trimworst(rawdecomptimes)
 
-        # Calculate min/max and sum for this level
-        mincomptime = min(comptimes)
-        mindecomptime = min(decomptimes)
+        # Compute averages
+        comp['avgtime']   = statistics.mean(comptimes)
+        decomp['avgtime'] = statistics.mean(decomptimes)
+        comp['avgpct'] = float(rsize*100)/origsize
 
-        maxcomptime = max(comptimes)
-        maxdecomptime = max(decomptimes)
+        # Compute stddev
+        if numresults >= 2:
+            comp['stddev']   = statistics.stdev(comptimes, comp['avgtime'])
+            decomp['stddev'] = statistics.stdev(decomptimes, decomp['avgtime'])
+        else:
+            comp['stddev']   = 0
+            decomp['stddev'] = 0
+
+        # Calculate min/max and sum for this level
+        comp['mintime']   = min(comptimes)
+        decomp['mintime'] = min(decomptimes)
+
+        comp['maxtime']   = max(comptimes)
+        decomp['maxtime'] = max(decomptimes)
 
         ltotcomptime += sum(comptimes)
         ltotdecomptime += sum(decomptimes)
 
-        # Compute and print values for this level
-        comppct = float(rsize*100)/origsize
-        avgcomptime = ltotcomptime/numresults
-        avgdecomptime = ltotdecomptime/numresults
-
         # Store values for grand total
         totsize += rsize
         totorigsize += origsize
-        totcomppct += comppct
+        totcomppct += comp['avgpct']
         totcomptime += ltotcomptime
         totdecomptime += ltotdecomptime
         if level != 0:
             totsize2 += rsize
             totorigsize2 += origsize
-            totcomppct2 += comppct
+            totcomppct2 += comp['avgpct']
             totcomptime2 += ltotcomptime
             totdecomptime2 += ltotdecomptime
 
         # Print level results
-        compstr = resultstr(mincomptime, avgcomptime, maxcomptime)
+        compstr = resultstr(comp)
         if cfgConfig['skipdecomp']:
             decompstr = ""
         else:
-            decompstr = resultstr(mindecomptime, avgdecomptime, maxdecomptime)
-        compstrpad = ' ' * (20 - get_len(compstr))
-        decompstrpad = ' ' * (23 - get_len(decompstr))
+            decompstr = resultstr(decomp)
+        compstrpad = ' ' * (27 - get_len(compstr))
+        decompstrpad = ' ' * (30 - get_len(decompstr))
 
-        print(f" {level:5} {comppct:7.3f}% {compstrpad}{compstr} {decompstrpad}{decompstr}  {compsize} ")
+        print(f" {level:5} {comp['avgpct']:7.3f}% {compstrpad}{compstr} {decompstrpad}{decompstr}  {compsize} ")
 
     ### Totals
     # Compression
