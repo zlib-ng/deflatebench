@@ -57,12 +57,14 @@ def get_len(s):
     ''' Return string length excluding ANSI escape strings '''
     return len(strip_ANSI_regex("", s))
 
-def resultstr(result):
-    ''' Build result string '''
-    return ( f"{BLUE}{result['mintime']:.3f}{RESET}"
+def resultstr(result,totlen):
+    ''' Build result string and pad to totlen'''
+    tmpr = ( f"{BLUE}{result['mintime']:.3f}{RESET}"
              f"/{GREEN}{result['avgtime']:.3f}{RESET}"
              f"/{RED}{result['maxtime']:.3f}{RESET}"
              f"/{BRIGHT}{result['stddev']:.3f}{RESET}" )
+    padstr = ' ' * (totlen - get_len(tmpr))
+    return f"{padstr}{tmpr}"
 
 def printnn(text):
     ''' Print without causing a newline '''
@@ -327,7 +329,7 @@ def runtest(tempfiles,level):
     os.unlink(compfile)
 
     comppct = float(compsize*100)/tempfiles[level]['origsize']
-    printnn(f" {comptime:7.3f} {decomptime:7.3f} {compsize} {comppct:3.3f}%")
+    printnn(f" {comptime:7.3f} {decomptime:7.3f} {compsize:15,} {comppct:7.3f}%")
     printnn('\n')
 
     return compsize,comptime,decomptime,hashfail
@@ -422,15 +424,12 @@ def printreport(results, tempfiles):
             totdecomptime2 += ltotdecomptime
 
         # Print level results
-        compstr = resultstr(comp)
-        if cfgConfig['skipdecomp']:
-            decompstr = ""
-        else:
-            decompstr = resultstr(decomp)
-        compstrpad = ' ' * (27 - get_len(compstr))
-        decompstrpad = ' ' * (30 - get_len(decompstr))
+        compstr = resultstr(comp,28)
+        decompstr = ""
+        if not cfgConfig['skipdecomp']:
+            decompstr = resultstr(decomp,30)
 
-        print(f" {level:5} {comp['avgpct']:7.3f}% {compstrpad}{compstr} {decompstrpad}{decompstr}  {compsize} ")
+        print(f" {level:5}{comp['avgpct']:7.3f}% {compstr} {decompstr}  {compsize:15,}")
 
     ### Totals
     # Compression
@@ -454,14 +453,14 @@ def printreport(results, tempfiles):
             totdecompstr2 = f"{totdecomptime2:.3f}"
 
     # Print totals
-    print(f"\n {'avg1':5} {avgcomppct:7.3f}% {avgcomptime:20.3f} {avgdecompstr:>23}")
+    print(f"\n {'avg1':5}{avgcomppct:7.3f}% {avgcomptime:28.3f} {avgdecompstr:>30}")
     if cfgRuns['minlevel'] == 0:
-        print(f" {'avg2':5} {avgcomppct2:7.3f}% {avgcomptime2:20.3f} {avgdecompstr2:>23}")
-    print(f" {'tot':5} {'':8} {totcomptime:20.3f} {totdecompstr:>23}")
+        print(f" {'avg2':5}{avgcomppct2:7.3f}% {avgcomptime2:28.3f} {avgdecompstr2:>30}")
+    print(f" {'tot':5} {'':8}{totcomptime:28.3f} {totdecompstr:>30}  {totsize:15,}")
 
 def printfile(level,filename):
     filesize = os.path.getsize(filename)
-    print(f"Level {level}: {filename} {filesize/1024/1024:.1f} MiB / {filesize:,} B")
+    print(f"Level {level}: {filename} {filesize/1024/1024:6.1f} MiB  {filesize:12,} B")
 
 def benchmain():
     ''' Main benchmarking function '''
