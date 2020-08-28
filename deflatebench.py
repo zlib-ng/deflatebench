@@ -557,8 +557,7 @@ def main():
     parser.add_argument('-s','--single', help='Activate testmode "Single"', action='store_true')
     parser.add_argument('-m','--multi', help='Activate testmode "Multi".', action='store_true')
     parser.add_argument('-g','--gen', help='Activate testmode "Generate".', action='store_true')
-    parser.add_argument('-z','--minigzip', help='Use minigzip for testing.', action='store_true')
-    parser.add_argument('-d','--minideflate', help='Use minideflate for testing.', action='store_true')
+    parser.add_argument('-l','--testtool', help='Path to test tool.', action='store')
     parser.add_argument('--skipdecomp', help='Skip decompression benchmarks.', action='store_true')
     parser.add_argument('--skipverify', help='Skip verifying compressed files with system gzip.', action='store_true')
     args = parser.parse_args()
@@ -627,17 +626,8 @@ def main():
             print("Error, parameter '--gen' conflicts with parameters '--single' and '--multi'")
             sys.exit(1)
 
-    if args.minigzip:
-        if args.minideflate:
-            print("Error, parameter '--minigzip' conflicts with parameter '--minideflate'")
-            sys.exit(1)
-        cfgRuns['testtool'] = 'minigzip'
-
-    if args.minideflate:
-        if args.minigzip:
-            print("Error, parameter '--minideflate' conflicts with parameter '--minigzip'")
-            sys.exit(1)
-        cfgRuns['testtool'] = 'minideflate'
+    if args.testtool:
+        cfgRuns['testtool'] = args.testtool
 
     if 'minigzip' not in cfgRuns['testtool'] and 'minideflate' not in cfgRuns['testtool']:
         print("Error, config file spesifies invalid testtool. Valid choices are 'minigzip' and 'minideflate'.")
