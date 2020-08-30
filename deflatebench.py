@@ -33,8 +33,9 @@ import hashlib
 import argparse
 import subprocess
 import statistics
-from subprocess import PIPE
-from datetime import datetime, date, timedelta
+
+# Simple usleep function
+usleep = lambda x: time.sleep(x/1000000.0)
 
 BUF_SIZE = 1024*1024  # lets read stuff in 1MB chunks when hashing or copying
 
@@ -220,15 +221,15 @@ def runcommand(command, env=None, stoponfail=1, silent=1, output=os.devnull):
     ''' Run command, and handle special cases '''
     args = shlex.split(command, posix=sys.platform != 'win32')
     sp_args = {}
-    if (sys.platform == 'win32'):
+    if sys.platform == 'win32':
         sp_args['creationflags'] = subprocess.HIGH_PRIORITY_CLASS
-    if (silent == 1):
+    if silent == 1:
         devnull = open(output, 'w')
         retval = subprocess.call(args,env=env,stdout=devnull,**sp_args)
         devnull.close()
     else:
         retval = subprocess.call(args,env=env,**sp_args)
-    if ((retval != 0) and (stoponfail != 0)):
+    if (retval != 0) and (stoponfail != 0):
         sys.exit(f"Failed, retval({retval}): {command}")
     return retval
 
@@ -238,7 +239,7 @@ def get_env(bench=False):
         env['LD_PRELOAD'] = '/usr/lib64/nosync/nosync.so'
     return env
 
-def command_prefix(timefile):
+def command_prefix(filen):
     ''' Build the benchmarking command prefix '''
     if cfgTuning['use_chrt']:
         command = "/usr/bin/chrt -f 99"
@@ -246,7 +247,7 @@ def command_prefix(timefile):
         command = "/usr/bin/nice -n -20"
 
     if cfgConfig['use_perf']:
-        command += f" /usr/bin/perf stat -D {cfgConfig['start_delay']} -e cpu-clock:u -o '{timefile}' -- "
+        command += f" /usr/bin/perf stat -D {cfgConfig['start_delay']} -e cpu-clock:u -o '{filen}' -- "
     else:
         timeformat="%U"
         command += f" -20 /usr/bin/time -o {timefile} -f '{timeformat}' -- "
@@ -283,6 +284,7 @@ def runtest(tempfiles,level):
 
     # Compress
     printnn('c')
+    usleep(10)
     starttime = time.perf_counter()
     testtool = os.path.realpath(cfgRuns['testtool'])
 
@@ -296,6 +298,7 @@ def runtest(tempfiles,level):
     # Decompress
     if not cfgConfig['skipdecomp'] or not cfgConfig['skipverify']:
         printnn('d')
+        usleep(10)
         starttime = time.perf_counter()
         runcommand(f"{cmdprefix} {testtool} -d -c {compfile}", env=env, output=decompfile)
 
@@ -479,12 +482,12 @@ def benchmain():
 
     # Single testfile, we just reference the same file for every level
     if cfgRuns['testmode'] == 'single':
-        tmp_filename = os.path.join(cfgConfig['temp_path'], f"deflatebench.tmp")
+        tmp_filename = os.path.join(cfgConfig['temp_path'], "deflatebench.tmp")
         srcfile = findfile(cfgSingle['testfile'])
         shutil.copyfile(srcfile,tmp_filename)
         tmp_hash = hashfile(tmp_filename)
         origsize = os.path.getsize(tmp_filename)
-        print(f"Activated single file mode")
+        print("Activated single file mode")
         printfile(f"{cfgRuns['minlevel']}-{cfgRuns['maxlevel']}", srcfile)
 
         for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
@@ -495,7 +498,7 @@ def benchmain():
     else:
         # Multiple testfiles
         if cfgRuns['testmode'] == 'multi':
-            print(f"Activated multiple file mode.")
+            print("Activated multiple file mode.")
         else:
             print(f"Activated multiple generated file mode. Source: {cfgGen['srcFile']}")
 
@@ -547,7 +550,7 @@ def benchmain():
 
 def main():
     ''' Main function handles command-line arguments and loading the correct config '''
-    global homedir,cfgRuns,cfgConfig,cfgTuning,cfgGen,cfgSingle,cfgMulti
+    global cfgRuns,cfgConfig,cfgTuning,cfgGen,cfgSingle,cfgMulti
 
     parser = argparse.ArgumentParser(description='deflatebench - A zlib-ng benchmarking utility. Please see config file for more options.')
     parser.add_argument('-r','--runs', help='Number of benchmark runs.', type=int)
