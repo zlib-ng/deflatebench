@@ -58,14 +58,18 @@ def get_len(s):
     ''' Return string length excluding ANSI escape strings '''
     return len(strip_ANSI_regex("", s))
 
+def padstr(instr, length, left=False):
+    ''' Build string pad to length '''
+    padstr = ' ' * (length - get_len(instr))
+    return f"{padstr}{instr}" if not left else f"{instr}{padstr}"
+
 def resultstr(result,totlen):
     ''' Build result string and pad to totlen'''
     tmpr = ( f"{BLUE}{result['mintime']:.3f}{RESET}"
              f"/{GREEN}{result['avgtime']:.3f}{RESET}"
              f"/{RED}{result['maxtime']:.3f}{RESET}"
              f"/{BRIGHT}{result['stddev']:.3f}{RESET}" )
-    padstr = ' ' * (totlen - get_len(tmpr))
-    return f"{padstr}{tmpr}"
+    return padstr(tmpr, totlen)
 
 def printnn(text):
     ''' Print without causing a newline '''
@@ -447,15 +451,14 @@ def calculate(results, tempfiles):
 def printreport(comp,decomp,totals):
     ''' Print results table '''
     # Print config info
-    print(f"\n")
-    print(f" Tool: {cfgRuns['testtool']}")
-    print(f" Runs: {runs}")
-    print(f" Levels: {cfgRuns['minlevel']}-{cfgRuns['maxlevel']}")
-    print(f" Trimworst: {cfgRuns['trimworst']}")
+    levelrange = f"{cfgRuns['minlevel']}-{cfgRuns['maxlevel']}"
+    print("\n")
+    print(f" Tool: {cfgRuns['testtool']:10} Levels: {levelrange:10}")
+    print(f" Runs: {str(cfgRuns['runs']):10} Trim worst: {str(cfgRuns['trimworst']):10}")
 
     # Print header
     if cfgConfig['skipdecomp']:
-        print("\n Level   Comp   Comptime min/avg/max/stddev                          Compressed size")
+        print("\n Level   Comp   Comptime min/avg/max/stddev   Compressed size")
     else:
         print("\n Level   Comp   Comptime min/avg/max/stddev  Decomptime min/avg/max/stddev  Compressed size")
 
@@ -472,7 +475,11 @@ def printreport(comp,decomp,totals):
     print(f"\n {'avg1':5}{totals['avgcomppct']:7.3f}% {totals['avgcomptime']:28.3f} {totals['avgdecompstr']:>30}")
     if cfgRuns['minlevel'] == 0:
         print(f" {'avg2':5}{totals['avgcomppct2']:7.3f}% {totals['avgcomptime2']:28.3f} {totals['avgdecompstr2']:>30}")
-    print(f" {'tot':5} {'':8}{totals['totcomptime']:28.3f} {totals['totdecompstr']:>30}  {totals['totsize']:15,}")
+
+    if cfgConfig['skipdecomp']:
+        print(f" {'tot':5} {'':8}{totals['totcomptime']:28.3f}   {totals['totsize']:15,}")
+    else:
+        print(f" {'tot':5} {'':8}{totals['totcomptime']:28.3f} {totals['totdecompstr']:>30}  {totals['totsize']:15,}")
 
 def printfile(level,filename):
     ''' Prints formatted information about file '''
