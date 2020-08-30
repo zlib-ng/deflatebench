@@ -234,6 +234,7 @@ def runcommand(command, env=None, stoponfail=1, silent=1, output=os.devnull):
     return retval
 
 def get_env(bench=False):
+    ''' Build dict of environment variables '''
     env = dict()
     if bench and cfgTuning['use_nosync']:
         env['LD_PRELOAD'] = '/usr/lib64/nosync/nosync.so'
@@ -344,49 +345,34 @@ def trimworst(results):
         return results
     return results[:-cfgRuns['trimworst']]
 
-def printreport(results, tempfiles):
-    ''' Print results table '''
+def calculate(results, tempfiles):
+    ''' Calculate benchmark results '''
     totsize, totsize2 = [0]*2
-    totorigsize, totorigsize2 = [0]*2
     totcomppct, totcomppct2 = [0]*2
     totcomptime, totcomptime2 = [0]*2
     totdecomptime, totdecomptime2 = [0]*2
-    runs = cfgRuns['runs']
-    numresults = runs - cfgRuns['trimworst']
+    res_comp, res_decomp, res_totals = dict(), dict(), dict()
 
+    numresults = cfgRuns['runs'] - cfgRuns['trimworst']
     numlevels = len(range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1))
-
-    # Print config info
-    print(f"\n")
-    print(f" Tool: {cfgRuns['testtool']}")
-    print(f" Runs: {runs}")
-    print(f" Levels: {cfgRuns['minlevel']}-{cfgRuns['maxlevel']}")
-    print(f" Trimworst: {cfgRuns['trimworst']}")
-
-    # Print header
-    if cfgConfig['skipdecomp']:
-        print("\n Level   Comp   Comptime min/avg/max/stddev                          Compressed size")
-    else:
-        print("\n Level   Comp   Comptime min/avg/max/stddev  Decomptime min/avg/max/stddev  Compressed size")
 
     # Calculate and print stats per level
     for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
-        ltotcomptime, ltotdecomptime = [0,0]
         origsize = tempfiles[level]['origsize']
         comp, decomp = dict(), dict()
 
         # Find best/worst times for this level
-        compsize = None
+        comp['compsize'] = None
         rawcomptimes = []
         rawdecomptimes = []
         for run in results[level]:
             rsize,rcompt,rdecompt = run
             rawcomptimes.append(rcompt)
             rawdecomptimes.append(rdecompt)
-            if not compsize is None and compsize != rsize:
-                print(f"Warning: size changed between runs. Expected: {compsize} Got: {rsize}")
+            if comp['compsize'] is not None and comp['compsize'] != rsize:
+                print(f"Warning: size changed between runs. Expected: {comp['compsize']} Got: {rsize}")
             else:
-                compsize = rsize
+                comp['compsize'] = rsize
 
         # Trim the worst results
         comptimes = trimworst(rawcomptimes)
@@ -407,63 +393,89 @@ def printreport(results, tempfiles):
 
         # Calculate min/max and sum for this level
         comp['mintime']   = min(comptimes)
-        decomp['mintime'] = min(decomptimes)
-
         comp['maxtime']   = max(comptimes)
+        decomp['mintime'] = min(decomptimes)
         decomp['maxtime'] = max(decomptimes)
 
-        ltotcomptime += sum(comptimes)
-        ltotdecomptime += sum(decomptimes)
-
         # Store values for grand total
+        tmp_comptime = sum(comptimes)
+        tmp_decomptime = sum(decomptimes)
+
         totsize += rsize
-        totorigsize += origsize
         totcomppct += comp['avgpct']
-        totcomptime += ltotcomptime
-        totdecomptime += ltotdecomptime
+        totcomptime += tmp_comptime
+        totdecomptime += tmp_decomptime
         if level != 0:
             totsize2 += rsize
-            totorigsize2 += origsize
             totcomppct2 += comp['avgpct']
-            totcomptime2 += ltotcomptime
-            totdecomptime2 += ltotdecomptime
+            totcomptime2 += tmp_comptime
+            totdecomptime2 += tmp_decomptime
 
-        # Print level results
-        compstr = resultstr(comp,28)
-        decompstr = ""
-        if not cfgConfig['skipdecomp']:
-            decompstr = resultstr(decomp,30)
-
-        print(f" {level:5}{comp['avgpct']:7.3f}% {compstr} {decompstr}  {compsize:15,}")
+        # Put this levels results into the aggregate
+        res_comp[level] = dict(comp.items())
+        res_decomp[level] = dict(decomp.items())
 
     ### Totals
+    res_totals['numresults'] = numresults
+    res_totals['numlevels'] = numlevels
+    res_totals['totsize'] = totsize
+
     # Compression
-    avgcomppct = totcomppct/numlevels
-    avgcomptime = totcomptime/(numlevels*numresults)
+    res_totals['totcomptime'] = totcomptime
+    res_totals['avgcomppct'] = totcomppct/numlevels
+    res_totals['avgcomptime'] = totcomptime/(numlevels*numresults)
     if cfgRuns['minlevel'] == 0:
-        avgcomppct2 = totcomppct2/(numlevels-1)
-        avgcomptime2 = totcomptime2/((numlevels-1)*numresults)
+        res_totals['avgcomppct2'] = totcomppct2/(numlevels-1)
+        res_totals['avgcomptime2'] = totcomptime2/((numlevels-1)*numresults)
 
     # Decompression
     if cfgConfig['skipdecomp']:
-        avgdecomptime, avgdecompstr, totdecompstr = [''] * 3
-        avgdecomptime2, avgdecompstr2, totdecompstr2 = [''] * 3
+        res_totals['totdecomptime'] = totdecomptime
+        res_totals['avgdecomptime'], res_totals['avgdecompstr'], res_totals['totdecompstr'] = [''] * 3
+        res_totals['avgdecomptime2'], res_totals['avgdecompstr2'], res_totals['totdecompstr2'] = [''] * 3
     else:
-        avgdecomptime = totdecomptime/(numlevels*numresults)
-        avgdecompstr = f"{avgdecomptime:.3f}"
-        totdecompstr = f"{totdecomptime:.3f}"
+        res_totals['avgdecomptime'] = totdecomptime/(res_totals['numlevels'] * res_totals['numresults'])
+        res_totals['avgdecompstr'] = f"{res_totals['avgdecomptime']:.3f}"
+        res_totals['totdecompstr'] = f"{totdecomptime:.3f}"
         if cfgRuns['minlevel'] == 0:
-            avgdecomptime2 = totdecomptime2/((numlevels-1)*numresults)
-            avgdecompstr2 = f"{avgdecomptime2:.3f}"
-            totdecompstr2 = f"{totdecomptime2:.3f}"
+            res_totals['avgdecomptime2'] = totdecomptime2/((res_totals['numlevels'] - 1) * res_totals['numresults'])
+            res_totals['avgdecompstr2'] = f"{res_totals['avgdecomptime2']:.3f}"
+            res_totals['totdecompstr2'] = f"{totdecomptime2:.3f}"
+
+    return res_comp, res_decomp, res_totals
+
+def printreport(comp,decomp,totals):
+    ''' Print results table '''
+    # Print config info
+    print(f"\n")
+    print(f" Tool: {cfgRuns['testtool']}")
+    print(f" Runs: {runs}")
+    print(f" Levels: {cfgRuns['minlevel']}-{cfgRuns['maxlevel']}")
+    print(f" Trimworst: {cfgRuns['trimworst']}")
+
+    # Print header
+    if cfgConfig['skipdecomp']:
+        print("\n Level   Comp   Comptime min/avg/max/stddev                          Compressed size")
+    else:
+        print("\n Level   Comp   Comptime min/avg/max/stddev  Decomptime min/avg/max/stddev  Compressed size")
+
+    for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
+        # Print level results
+        compstr = resultstr(comp[level],28)
+        decompstr = ""
+        if not cfgConfig['skipdecomp']:
+            decompstr = resultstr(decomp[level],30)
+
+        print(f" {level:5}{comp[level]['avgpct']:7.3f}% {compstr} {decompstr}  {comp[level]['compsize']:15,}")
 
     # Print totals
-    print(f"\n {'avg1':5}{avgcomppct:7.3f}% {avgcomptime:28.3f} {avgdecompstr:>30}")
+    print(f"\n {'avg1':5}{totals['avgcomppct']:7.3f}% {totals['avgcomptime']:28.3f} {totals['avgdecompstr']:>30}")
     if cfgRuns['minlevel'] == 0:
-        print(f" {'avg2':5}{avgcomppct2:7.3f}% {avgcomptime2:28.3f} {avgdecompstr2:>30}")
-    print(f" {'tot':5} {'':8}{totcomptime:28.3f} {totdecompstr:>30}  {totsize:15,}")
+        print(f" {'avg2':5}{totals['avgcomppct2']:7.3f}% {totals['avgcomptime2']:28.3f} {totals['avgdecompstr2']:>30}")
+    print(f" {'tot':5} {'':8}{totals['totcomptime']:28.3f} {totals['totdecompstr']:>30}  {totals['totsize']:15,}")
 
 def printfile(level,filename):
+    ''' Prints formatted information about file '''
     filesize = os.path.getsize(filename)
     print(f"Level {level}: {filename} {filesize/1024/1024:6.1f} MiB  {filesize:12,} B")
 
@@ -538,7 +550,8 @@ def benchmain():
                 print(f"ERROR: level {level} failed crc checking")
             results[level].append( [compsize,comptime,decomptime] )
 
-    printreport(results, tempfiles)
+    res_comp,res_decomp,res_totals = calculate(results, tempfiles)
+    printreport(res_comp,res_decomp,res_totals)
 
     # Disable system tweaks to restore normal powersaving, turbo, etc
     cputweak(False)
