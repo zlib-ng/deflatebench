@@ -83,6 +83,7 @@ def defconfig():
                             'trimworst': 5,
                             'minlevel': 0,
                             'maxlevel': 9,
+                            'strategies': '', # fhRF
                             'testmode': 'single',  # generate / multi / single
                             'testtool': 'minigzip' } # minigzip / minideflate
 
@@ -349,6 +350,12 @@ def trimworst(results):
         return results
     return results[:-cfgRuns['trimworst']]
 
+def getlevels():
+    levels = list(range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1))
+    for strategy in cfgRuns['strategies']:
+        levels.append(strategy)
+    return levels
+
 def calculate(results, tempfiles):
     ''' Calculate benchmark results '''
     totsize, totsize2 = [0]*2
@@ -358,10 +365,10 @@ def calculate(results, tempfiles):
     res_comp, res_decomp, res_totals = dict(), dict(), dict()
 
     numresults = cfgRuns['runs'] - cfgRuns['trimworst']
-    numlevels = len(range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1))
+    numlevels = len(getlevels())
 
     # Calculate and print stats per level
-    for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
+    for level in map(str, getlevels()):
         origsize = tempfiles[level]['origsize']
         comp, decomp = dict(), dict()
 
@@ -462,7 +469,7 @@ def printreport(comp,decomp,totals):
     else:
         print("\n Level   Comp   Comptime min/avg/max/stddev  Decomptime min/avg/max/stddev  Compressed size")
 
-    for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
+    for level in map(str, getlevels()):
         # Print level results
         compstr = resultstr(comp[level],28)
         decompstr = ""
@@ -509,7 +516,7 @@ def benchmain():
         print("Activated single file mode")
         printfile(f"{cfgRuns['minlevel']}-{cfgRuns['maxlevel']}", srcfile)
 
-        for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
+        for level in map(str, getlevels()):
             tempfiles[level] = dict()
             tempfiles[level]['filename'] = tmp_filename
             tempfiles[level]['hash'] = tmp_hash
@@ -521,7 +528,7 @@ def benchmain():
         else:
             print(f"Activated multiple generated file mode. Source: {cfgGen['srcFile']}")
 
-        for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
+        for level in map(str, getlevels()):
             tempfiles[level] = dict()
             tmp_filename = os.path.join(cfgConfig['temp_path'], f"deflatebench-{level}.tmp")
             tempfiles[level]['filename'] = tmp_filename
@@ -542,7 +549,7 @@ def benchmain():
 
     # Prepare multilevel results array
     results = dict()
-    for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
+    for level in map(str, getlevels()):
         results[level] = []
 
     # Run tests and record results
@@ -551,7 +558,7 @@ def benchmain():
             cfgConfig['skipverify'] = True
 
         print(f"Starting run {run} of {cfgRuns['runs']}")
-        for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
+        for level in map(str, getlevels()):
             compsize,comptime,decomptime,hashfail = runtest(tempfiles,level)
             if hashfail != 0:
                 print(f"ERROR: level {level} failed crc checking")
@@ -564,7 +571,7 @@ def benchmain():
     cputweak(False)
 
     # Clean up tempfiles
-    for level in map(str, range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1)):
+    for level in map(str, getlevels()):
         if os.path.isfile(tempfiles[level]['filename']):
             os.unlink(tempfiles[level]['filename'])
 
