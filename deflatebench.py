@@ -224,6 +224,7 @@ def generate_testfile(sourcefile,destfile,minsize):
 
 def runcommand(command, env=None, stoponfail=1, silent=1, output=os.devnull):
     ''' Run command, and handle special cases '''
+    env = env if env else None
     args = shlex.split(command, posix=sys.platform != 'win32')
     sp_args = {}
     if sys.platform == 'win32':
