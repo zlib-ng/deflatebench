@@ -33,6 +33,7 @@ import hashlib
 import argparse
 import subprocess
 import statistics
+import platform
 
 # Simple usleep function
 usleep = lambda x: time.sleep(x/1000000.0)
@@ -456,13 +457,21 @@ def calculate(results, tempfiles):
 
     return res_comp, res_decomp, res_totals
 
+def printinfo():
+    uname = platform.uname()
+    print(f"OS: {uname.system} {uname.release} {uname.version} {uname.machine}")
+    print(f"CPU: {platform.processor()}")
+    print(f"Tool: {cfgRuns['testtool']}")
+
 def printreport(comp,decomp,totals):
     ''' Print results table '''
     # Print config info
-    levelrange = f"{cfgRuns['minlevel']}-{cfgRuns['maxlevel']}"
+
     print("\n")
-    print(f" Tool: {cfgRuns['testtool']:10} Levels: {levelrange:10}")
-    print(f" Runs: {str(cfgRuns['runs']):10} Trim worst: {str(cfgRuns['trimworst']):10}")
+    printinfo()
+    levelrange = f"{cfgRuns['minlevel']}-{cfgRuns['maxlevel']}"
+    print(f"Levels: {levelrange:10}")
+    print(f"Runs: {str(cfgRuns['runs']):10} Trim worst: {str(cfgRuns['trimworst']):10}")
 
     # Print header
     if cfgConfig['skipdecomp']:
@@ -498,7 +507,7 @@ def benchmain():
     ''' Main benchmarking function '''
     global timefile, compfile, decompfile
 
-    print(f"Tool: {cfgRuns['testtool']}")
+    printinfo()
 
     # Prepare tempfiles
     timefile = os.path.join(cfgConfig['temp_path'], 'zlib-time.tmp')
