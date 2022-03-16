@@ -461,7 +461,7 @@ def printinfo():
     uname = platform.uname()
     print(f"OS: {uname.system} {uname.release} {uname.version} {uname.machine}")
     print(f"CPU: {platform.processor()}")
-    print(f"Tool: {cfgRuns['testtool']}")
+    print(f"Tool: {cfgRuns['testtool']} Size: {os.path.getsize(cfgRuns['testtool']):,} B")
 
 def printreport(comp,decomp,totals):
     ''' Print results table '''
