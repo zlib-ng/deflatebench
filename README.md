@@ -4,6 +4,14 @@ This tool must be run from the folder where an executable `minigzip` or `minidef
 Ex: `../deflatebench/deflatebench.py --gen`. (I suggest making a symlink to it though, for example in /usr/bin/)\
 You must provide the tool with testdata files.
 
+### Prerequisites
+
+To setup the required Python packages use the following command:
+
+```
+python3 -m pip install -r requirements.txt
+```
+
 ### Config Files
 * `--write` parameter creates a new config file as ~/deflatebench.conf
 * Supports profiles in separate config files
