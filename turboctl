@@ -1,9 +1,27 @@
 #!/usr/bin/sh
+DONE=0
 if [ $1 == "off" ]; then
-    echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo
+    if [ -f "/sys/devices/system/cpu/intel_pstate/no_turbo" ]; then
+        echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo
+        DONE=1
+    fi
+    if [ -f "/sys/devices/system/cpu/cpufreq/boost" ]; then
+        echo 1 > /sys/devices/system/cpu/cpufreq/boost
+        DONE=1
+    fi
 fi
 
 if [ $1 == "on" ]; then
-    echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo
+    if [ -f "/sys/devices/system/cpu/intel_pstate/no_turbo" ]; then
+        echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo
+        DONE=1
+    fi
+    if [ -f "/sys/devices/system/cpu/cpufreq/boost" ]; then
+        echo 0 > /sys/devices/system/cpu/cpufreq/boost
+        DONE=1
+    fi
 fi
 
+if [ "$DONE" -eq 0 ]; then
+    echo "Unable to find turbo control file.."
+fi

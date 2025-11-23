@@ -66,10 +66,10 @@ def padstr(instr, length, left=False):
 
 def resultstr(result,totlen):
     ''' Build result string and pad to totlen'''
-    tmpr = ( f"{BLUE}{result['mintime']:.3f}{RESET}"
-             f"/{GREEN}{result['avgtime']:.3f}{RESET}"
-             f"/{RED}{result['maxtime']:.3f}{RESET}"
-             f"/{BRIGHT}{result['stddev']:.3f}{RESET}" )
+    tmpr = ( f"{BLUE}{result['mintime']:.4f}{RESET}"
+             f"/{GREEN}{result['avgtime']:.4f}{RESET}"
+             f"/{RED}{result['maxtime']:.4f}{RESET}"
+             f"/{BRIGHT}{result['stddev']:.4f}{RESET}" )
     return padstr(tmpr, totlen)
 
 def printnn(text):
@@ -361,7 +361,7 @@ def runtest(tempfiles,level):
     os.unlink(compfile)
 
     comppct = float(compsize*100)/tempfiles[level]['origsize']
-    printnn(f" {comptime:7.3f} {decomptime:7.3f} {compsize:15,} {comppct:7.3f}%")
+    printnn(f" {comptime:7.4f} {decomptime:7.4f} {compsize:15,} {comppct:7.3f}%")
     printnn('\n')
 
     return compsize,comptime,decomptime,hashfail
@@ -469,12 +469,12 @@ def calculate(results, tempfiles):
         res_totals['avgdecomptime2'], res_totals['avgdecompstr2'], res_totals['totdecompstr2'] = [''] * 3
     else:
         res_totals['avgdecomptime'] = totdecomptime/(res_totals['numlevels'] * res_totals['numresults'])
-        res_totals['avgdecompstr'] = f"{res_totals['avgdecomptime']:.3f}"
-        res_totals['totdecompstr'] = f"{totdecomptime:.3f}"
+        res_totals['avgdecompstr'] = f"{res_totals['avgdecomptime']:.4f}"
+        res_totals['totdecompstr'] = f"{totdecomptime:.4f}"
         if cfgRuns['minlevel'] == 0:
             res_totals['avgdecomptime2'] = totdecomptime2/((res_totals['numlevels'] - 1) * res_totals['numresults'])
-            res_totals['avgdecompstr2'] = f"{res_totals['avgdecomptime2']:.3f}"
-            res_totals['totdecompstr2'] = f"{totdecomptime2:.3f}"
+            res_totals['avgdecompstr2'] = f"{res_totals['avgdecomptime2']:.4f}"
+            res_totals['totdecompstr2'] = f"{totdecomptime2:.4f}"
 
     return res_comp, res_decomp, res_totals
 
@@ -520,14 +520,14 @@ def printreport(comp,decomp,totals):
         print(f" {level:5}{comp[level]['avgpct']:7.3f}% {compstr} {decompstr}  {comp[level]['compsize']:15,}")
 
     # Print totals
-    print(f"\n {'avg1':5}{totals['avgcomppct']:7.3f}% {totals['avgcomptime']:28.3f} {totals['avgdecompstr']:>30}")
+    print(f"\n {'avg1':5}{totals['avgcomppct']:7.3f}% {totals['avgcomptime']:28.4f} {totals['avgdecompstr']:>30}")
     if cfgRuns['minlevel'] == 0:
-        print(f" {'avg2':5}{totals['avgcomppct2']:7.3f}% {totals['avgcomptime2']:28.3f} {totals['avgdecompstr2']:>30}")
+        print(f" {'avg2':5}{totals['avgcomppct2']:7.3f}% {totals['avgcomptime2']:28.4f} {totals['avgdecompstr2']:>30}")
 
     if cfgConfig['skipdecomp']:
-        print(f" {'tot':5} {'':8}{totals['totcomptime']:28.3f}   {totals['totsize']:15,}")
+        print(f" {'tot':5} {'':8}{totals['totcomptime']:28.4f}   {totals['totsize']:15,}")
     else:
-        print(f" {'tot':5} {'':8}{totals['totcomptime']:28.3f} {totals['totdecompstr']:>30}  {totals['totsize']:15,}")
+        print(f" {'tot':5} {'':8}{totals['totcomptime']:28.4f} {totals['totdecompstr']:>30}  {totals['totsize']:15,}")
 
 def printfile(level,filename):
     ''' Prints formatted information about file '''
