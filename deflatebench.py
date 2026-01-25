@@ -247,17 +247,6 @@ def get_env(bench=False):
         env['LD_PRELOAD'] = '/usr/lib64/nosync/nosync.so'
     return env
 
-def has_external_time():
-    ''' Check if external timing tools are available '''
-    if cfgConfig['use_perf']:
-        return True
-    if sys.platform == 'darwin':
-        # On macOS, check if gtime (GNU time) is available
-        return shutil.which('gtime') is not None
-    else:
-        # On Linux and other Unix systems, assume /usr/bin/time is available
-        return True
-
 def command_prefix(filen):
     ''' Build the benchmarking command prefix '''
     if cfgTuning['use_chrt']:
@@ -269,13 +258,7 @@ def command_prefix(filen):
         command += f" /usr/bin/perf stat -D {cfgConfig['start_delay']} -e cpu-clock:u -o '{filen}' -- "
     else:
         timeformat="%U"
-        # On macOS, try to use gtime if available, otherwise use a different approach
-        if sys.platform == 'darwin':
-            # Check if gtime is available, otherwise fallback to Python's perf_counter
-            if shutil.which('gtime'):
-                command += f" gtime -o {timefile} -f '{timeformat}' -- "
-        else:
-            command += f" /usr/bin/time -o {timefile} -f '{timeformat}' -- "
+        command += f" -20 /usr/bin/time -o {timefile} -f '{timeformat}' -- "
 
     return command
 
@@ -289,9 +272,6 @@ def parse_timefile(filen):
                 return float(line[:-13])
         return 0.0
     else:
-        # On macOS without gtime, we might not have a time file
-        if not os.path.exists(filen):
-            return 0.0
         with open(filen) as f:
             content = f.readlines()
         return float(content[0])
@@ -306,8 +286,7 @@ def runtest(tempfiles,level):
     env = get_env(True)
 
     sys.stdout.write(f"Testing level {level}: ")
-    use_external_timing = has_external_time()
-    if sys.platform != 'win32' and use_external_timing:
+    if sys.platform != 'win32':
         cmdprefix = command_prefix(timefile)
         runcommand('sync')
 
@@ -318,7 +297,7 @@ def runtest(tempfiles,level):
     testtool = os.path.realpath(cfgRuns['testtool'])
 
     runcommand(f"{cmdprefix} {testtool} -{level} -c {testfile}", env=env, output=compfile)
-    if sys.platform != 'win32' and use_external_timing:
+    if sys.platform != 'win32':
         comptime = parse_timefile(timefile)
     else:
         comptime = time.perf_counter() - starttime
@@ -331,7 +310,7 @@ def runtest(tempfiles,level):
         starttime = time.perf_counter()
         runcommand(f"{cmdprefix} {testtool} -d -c {compfile}", env=env, output=decompfile)
 
-        if sys.platform != 'win32' and use_external_timing:
+        if sys.platform != 'win32':
             decomptime = parse_timefile(timefile)
         else:
             decomptime = time.perf_counter() - starttime
@@ -483,16 +462,6 @@ def printinfo():
     print(f"OS: {uname.system} {uname.release} {uname.version} {uname.machine}")
     print(f"CPU: {platform.processor()}")
     print(f"Tool: {cfgRuns['testtool']} Size: {os.path.getsize(cfgRuns['testtool']):,} B")
-
-    # Print timing method information
-    if cfgConfig['use_perf']:
-        print("Timing: perf")
-    elif sys.platform == 'darwin' and not shutil.which('gtime'):
-        print("Timing: Python perf_counter (GNU time not available)")
-    elif sys.platform == 'darwin' and shutil.which('gtime'):
-        print("Timing: GNU time (gtime)")
-    else:
-        print("Timing: GNU time (/usr/bin/time)")
 
 def printreport(comp,decomp,totals):
     ''' Print results table '''
