@@ -45,8 +45,9 @@ python3 -m pip install -r requirements.txt
 * Please note that for best performance, the temp folder specified in the config [Default /tmp/] should be tmpfs or ramdisk.
 
 ### Example Testdata
-As a convenience, I have created a couple uncompressed tar files that can be used for `single` and `gen` testmodes:
-* [202MiB full Silesia testcorpus](https://mirror.circlestorm.org/silesia.tar)
-* [15MiB custom cropped Silesia testcorpus](https://mirror.circlestorm.org/silesia-small.tar)
+As a convenience, I have created a few uncompressed tar files that can be used for `single` and `gen` testmodes:
+* [203MiB full Silesia testcorpus](https://mirror.circlestorm.org/silesia.tar)
+* [44MiB custom cropped Silesia testcorpus](https://mirror.circlestorm.org/silesia-medium.tar)
+* [16MiB custom cropped Silesia testcorpus](https://mirror.circlestorm.org/silesia-small.tar)
 
 The original source of this testcorpus is here: [Silesia](http://sun.aei.polsl.pl/~sdeor/index.php?page=silesia)
