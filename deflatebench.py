@@ -173,16 +173,17 @@ def printfile(level,filename):
 
 def benchmain():
     ''' Main benchmarking function '''
-    util.printsysinfo()
-    print(f"Tool: {cfgRuns['testtool']} Size: {os.path.getsize(cfgRuns['testtool']):,} B")
-
     tempfiles = dict()
 
     timefile = os.path.join(cfgConfig['temp_path'], 'zlib-time.tmp')
 
     # Detect external tools
-    util.find_tools(timefile, use_prio=cfgTuning['use_prio'], use_perf=cfgConfig['use_perf'],
-                    use_turboctl=cfgTuning['use_turboctl'], use_cpupower=cfgTuning['use_cpupower'])
+    benchmode = util.find_tools(timefile, use_prio=cfgTuning['use_prio'], use_perf=cfgConfig['use_perf'],
+                                use_turboctl=cfgTuning['use_turboctl'], use_cpupower=cfgTuning['use_cpupower'])
+
+    util.printsysinfo()
+    print(f"Tool: {cfgRuns['testtool']} Size: {os.path.getsize(cfgRuns['testtool']):,} B")
+    print(f"Timings mode: {benchmode}")
 
     # Single testfile, we just reference the same file for every level
     if cfgRuns['testmode'] == 'single':
@@ -237,7 +238,7 @@ def benchmain():
 
         print(f"Starting run {run} of {cfgRuns['runs']}")
         for level in map(str, getlevels()):
-            compsize,comptime,decomptime,hashfail = benchmark.runtest(cfgRuns['testtool'], cfgConfig['temp_path'],
+            compsize,comptime,decomptime,hashfail = benchmark.runtest(cfgRuns['testtool'], benchmode, cfgConfig['temp_path'],
                                                                       tempfiles, timefile, level, util.cmdprefix,
                                                                       cfgConfig['skipdecomp'], cfgConfig['skipverify'])
             if hashfail != 0:
