@@ -16,7 +16,7 @@ from . import util
 # Simple usleep function
 usleep = lambda x: time.sleep(x/1000000.0)
 
-def runtest(testtool, temp_path, tempfiles, timefile, level, cmdprefix, skipdecomp, skipverify):
+def runtest(testtool, benchmode, temp_path, tempfiles, timefile, level, cmdprefix, skipdecomp, skipverify):
     ''' Run benchmark and tests for current compression level'''
     # Prepare tempfiles
     compfile = os.path.join(temp_path, 'zlib-testfil.gz')
@@ -39,10 +39,10 @@ def runtest(testtool, temp_path, tempfiles, timefile, level, cmdprefix, skipdeco
     testtool = os.path.realpath(testtool)
 
     util.runcommand(f"{cmdprefix} {testtool} -{level} -c {testfile}", env=env, output=compfile)
-    if sys.platform != 'win32':
-        comptime = util.parse_timefile(timefile)
-    else:
+    if benchmode == 'python':
         comptime = time.perf_counter() - starttime
+    else:
+        comptime = util.parse_timefile(timefile)
     compsize = os.path.getsize(compfile)
 
     # Decompress
@@ -52,10 +52,10 @@ def runtest(testtool, temp_path, tempfiles, timefile, level, cmdprefix, skipdeco
         starttime = time.perf_counter()
         util.runcommand(f"{cmdprefix} {testtool} -d -c {compfile}", env=env, output=decompfile)
 
-        if sys.platform != 'win32':
-            decomptime = util.parse_timefile(timefile)
-        else:
+        if benchmode == 'python':
             decomptime = time.perf_counter() - starttime
+        else:
+            decomptime = util.parse_timefile(timefile)
 
         if not skipverify:
             ourhash = util.hashfile(decompfile)

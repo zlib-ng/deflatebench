@@ -32,7 +32,7 @@ def get_env(bench=False):
 def printsysinfo():
     ''' Print system information '''
     uname = platform.uname()
-    print(f"OS: {uname.system} {uname.release} {uname.version} {uname.machine}")
+    print(f"\nOS: {uname.system} {uname.release} {uname.version} {uname.machine}")
     print(f"CPU: {platform.processor()}")
 
 def find_tools(timefile, use_prio=True, use_perf=True, use_turboctl=True, use_cpupower=False):
@@ -73,18 +73,22 @@ def find_tools(timefile, use_prio=True, use_perf=True, use_turboctl=True, use_cp
     if use_perf and perf_exe:
         print(f"Found {perf_exe}, activating.")
         cmdprefix += f" {perf_exe} stat -e cpu-clock:u -o '{timefile}' -- "
-        used_perf = True
+        mode = 'perf'
     else:
         # Fallback to 'time' if found
         if time_exe:
             print(f"Found {time_exe}, activating.")
             timeformat="%U"
             cmdprefix += f" {time_exe} -o '{timefile}' -f '{timeformat}' -- "
+            mode = 'time'
 
         if use_perf is True and time_exe:
             print("Warning: Failed to find 'perf' util, falling back to less accurate 'time' for cputime measurements.")
         else:
             print("Warning: Failed to find 'perf' and 'time' util, unable to accurately measure elapsed cputime.")
+            mode = 'python'
+
+    return mode
 
 def cputweak(enable):
     ''' Disable turbo, disable idlestates, and set fixed cpu mhz. Requires sudo rights. '''
