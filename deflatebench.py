@@ -9,101 +9,14 @@
 
 import os, os.path
 import sys
-import time
 import shutil
 import argparse
 import statistics
 
+from includes import benchmark
 from includes import cli
 from includes import config
 from includes import util
-
-# Simple usleep function
-usleep = lambda x: time.sleep(x/1000000.0)
-
-def command_prefix(filen):
-    ''' Build the benchmarking command prefix '''
-    if cfgTuning['use_chrt']:
-        command = "/usr/bin/chrt -f 99"
-    else:
-        command = "/usr/bin/nice -n -20"
-
-    if cfgConfig['use_perf']:
-        command += f" /usr/bin/perf stat -D {cfgConfig['start_delay']} -e cpu-clock:u -o '{filen}' -- "
-    else:
-        timeformat="%U"
-        command += f" -20 /usr/bin/time -o {timefile} -f '{timeformat}' -- "
-
-    return command
-
-def runtest(tempfiles,level):
-    ''' Run benchmark and tests for current compression level'''
-    hashfail, decomptime = 0,0
-    testfile = tempfiles[level]['filename']
-    orighash = tempfiles[level]['hash']
-    cmdprefix = ''
-
-    env = util.get_env(True)
-
-    sys.stdout.write(f"Testing level {level}: ")
-    if sys.platform != 'win32':
-        cmdprefix = command_prefix(timefile)
-        util.runcommand('sync')
-
-    # Compress
-    cli.printnn('c')
-    usleep(10)
-    starttime = time.perf_counter()
-    testtool = os.path.realpath(cfgRuns['testtool'])
-
-    util.runcommand(f"{cmdprefix} {testtool} -{level} -c {testfile}", env=env, output=compfile)
-    if sys.platform != 'win32':
-        comptime = util.parse_timefile(timefile)
-    else:
-        comptime = time.perf_counter() - starttime
-    compsize = os.path.getsize(compfile)
-
-    # Decompress
-    if not cfgConfig['skipdecomp'] or not cfgConfig['skipverify']:
-        cli.printnn('d')
-        usleep(10)
-        starttime = time.perf_counter()
-        util.runcommand(f"{cmdprefix} {testtool} -d -c {compfile}", env=env, output=decompfile)
-
-        if sys.platform != 'win32':
-            decomptime = util.parse_timefile(timefile)
-        else:
-            decomptime = time.perf_counter() - starttime
-
-        if not cfgConfig['skipverify']:
-            ourhash = util.hashfile(decompfile)
-            if ourhash != orighash:
-                print(f"{orighash} != {ourhash}")
-                hashfail = 1
-
-        os.unlink(decompfile)
-
-    # Validate using gunzip
-    if not cfgConfig['skipverify']:
-        cli.printnn('v')
-        util.runcommand(f"gunzip -c {compfile}", output=decompfile)
-
-        gziphash = util.hashfile(decompfile)
-        if gziphash != orighash:
-            print(f"{orighash} != {gziphash}")
-            hashfail = 1
-
-        os.unlink(decompfile)
-
-    if os.path.exists(timefile):
-        os.unlink(timefile)
-    os.unlink(compfile)
-
-    comppct = float(compsize*100)/tempfiles[level]['origsize']
-    cli.printnn(f" {comptime:7.4f} {decomptime:7.4f} {compsize:15,} {comppct:7.3f}%")
-    cli.printnn('\n')
-
-    return compsize,comptime,decomptime,hashfail
 
 def trimworst(results):
     ''' Trim X worst results '''
@@ -260,17 +173,17 @@ def printfile(level,filename):
 
 def benchmain():
     ''' Main benchmarking function '''
-    global timefile, compfile, decompfile
+    tempfiles = dict()
+
+    timefile = os.path.join(cfgConfig['temp_path'], 'zlib-time.tmp')
+
+    # Detect external tools
+    benchmode = util.find_tools(timefile, use_prio=cfgTuning['use_prio'], use_perf=cfgConfig['use_perf'],
+                                use_turboctl=cfgTuning['use_turboctl'], use_cpupower=cfgTuning['use_cpupower'])
 
     util.printsysinfo()
     print(f"Tool: {cfgRuns['testtool']} Size: {os.path.getsize(cfgRuns['testtool']):,} B")
-
-    # Prepare tempfiles
-    timefile = os.path.join(cfgConfig['temp_path'], 'zlib-time.tmp')
-    compfile = os.path.join(cfgConfig['temp_path'], 'zlib-testfil.gz')
-    decompfile = os.path.join(cfgConfig['temp_path'], 'zlib-testfil.raw')
-
-    tempfiles = dict()
+    print(f"Timings mode: {benchmode}")
 
     # Single testfile, we just reference the same file for every level
     if cfgRuns['testmode'] == 'single':
@@ -279,7 +192,7 @@ def benchmain():
         shutil.copyfile(srcfile,tmp_filename)
         tmp_hash = util.hashfile(tmp_filename)
         origsize = os.path.getsize(tmp_filename)
-        print("Activated single file mode")
+        print("\nActivated single file mode")
         printfile(f"{cfgRuns['minlevel']}-{cfgRuns['maxlevel']}", srcfile)
 
         for level in map(str, getlevels()):
@@ -290,9 +203,9 @@ def benchmain():
     else:
         # Multiple testfiles
         if cfgRuns['testmode'] == 'multi':
-            print("Activated multiple file mode.")
+            print("\nActivated multiple file mode.")
         else:
-            print(f"Activated multiple generated file mode. Source: {cfgGen['srcFile']}")
+            print(f"\nActivated multiple generated file mode. Source: {cfgGen['srcFile']}")
 
         for level in map(str, getlevels()):
             tempfiles[level] = dict()
@@ -325,7 +238,9 @@ def benchmain():
 
         print(f"Starting run {run} of {cfgRuns['runs']}")
         for level in map(str, getlevels()):
-            compsize,comptime,decomptime,hashfail = runtest(tempfiles,level)
+            compsize,comptime,decomptime,hashfail = benchmark.runtest(cfgRuns['testtool'], benchmode, cfgConfig['temp_path'],
+                                                                      tempfiles, timefile, level, util.cmdprefix,
+                                                                      cfgConfig['skipdecomp'], cfgConfig['skipverify'])
             if hashfail != 0:
                 print(f"ERROR: level {level} failed crc checking")
             results[level].append( [compsize,comptime,decomptime] )
