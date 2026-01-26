@@ -21,14 +21,12 @@ def defconfig():
 
     config['Config'] = {'temp_path': tempfile.gettempdir(),
                         'use_perf': True,
-                        'start_delay': 0,   # Milliseconds of startup to skip measuring, requires usleep(X*1000) in minigzip/minideflate main()
                         'skipverify': False,
                         'skipdecomp': False}
 
     ## CPU related settings
-    config['Tuning'] = {'use_chrt': False,
-                        'use_nosync': False,
-                        'use_turboctl': False,
+    config['Tuning'] = {'use_prio': True,
+                        'use_turboctl': True,
                         'use_cpupower': False,
                         'cpu_std_minspeed': 1000,
                         'cpu_std_maxspeed': 2200,

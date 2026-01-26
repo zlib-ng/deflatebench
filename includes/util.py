@@ -13,8 +13,10 @@ import math
 import platform
 import subprocess
 import shlex
+import shutil
 
 BUF_SIZE = 1024*1024  # lets read stuff in 1MB chunks when hashing or copying
+cmdprefix = ''
 
 def init(inConfig, inTuning):
     ''' Initialize variables '''
@@ -25,8 +27,6 @@ def init(inConfig, inTuning):
 def get_env(bench=False):
     ''' Build dict of environment variables '''
     env = dict()
-    if bench and cfgTuning['use_nosync']:
-        env['LD_PRELOAD'] = '/usr/lib64/nosync/nosync.so'
     return env
 
 def printsysinfo():
@@ -35,23 +35,74 @@ def printsysinfo():
     print(f"OS: {uname.system} {uname.release} {uname.version} {uname.machine}")
     print(f"CPU: {platform.processor()}")
 
+def find_tools(timefile, use_prio=True, use_perf=True, use_turboctl=True, use_cpupower=False):
+    global cmdprefix, chrt_exe, nice_exe, perf_exe, time_exe, turboctl_exe, cpupower_exe
+    time_exe = shutil.which('time')
+    perf_exe = shutil.which('perf')
+    turboctl_exe = shutil.which('turboctl')
+    cpupower_exe = shutil.which('cpupower')
+
+    if use_turboctl and turboctl_exe:
+        print(f"Found {turboctl_exe}, activating.")
+    else:
+        cfgTuning['use_turboctl']=False
+        if use_turboctl is True:
+            print("Warning: Failed to find 'turboctl', cpu turbo not disabled during benchmarking.")
+
+    if use_cpupower and cpupower_exe:
+            print(f"Found {cpupower_exe}, activating.")
+    else:
+        cfgTuning['use_cpupower']=False
+        if use_cpupower is True:
+            print("Warning: Failed to find 'cpupower', cpu scaling not disabled during benchmarking.")
+
+    # Detect 'chrt', fallback to 'nice'
+    if use_prio:
+        chrt_exe = shutil.which('chrt')
+        nice_exe = shutil.which('nice')
+        if chrt_exe:
+            print(f"Found {chrt_exe}, activating.")
+            cmdprefix = f"{chrt_exe} -f 99"
+        elif nice_exe:
+            print(f"Found {nice_exe}, activating.")
+            cmdprefix = f"{nice_exe} -n -20"
+        elif use_prio is True:
+            print("Warning: Failed to find 'chrt' or 'nice', cpu priority not set.")
+
+    # Detect 'perf'
+    if use_perf and perf_exe:
+        print(f"Found {perf_exe}, activating.")
+        cmdprefix += f" {perf_exe} stat -e cpu-clock:u -o '{timefile}' -- "
+        used_perf = True
+    else:
+        # Fallback to 'time' if found
+        if time_exe:
+            print(f"Found {time_exe}, activating.")
+            timeformat="%U"
+            cmdprefix += f" {time_exe} -o '{timefile}' -f '{timeformat}' -- "
+
+        if use_perf is True and time_exe:
+            print("Warning: Failed to find 'perf' util, falling back to less accurate 'time' for cputime measurements.")
+        else:
+            print("Warning: Failed to find 'perf' and 'time' util, unable to accurately measure elapsed cputime.")
+
 def cputweak(enable):
     ''' Disable turbo, disable idlestates, and set fixed cpu mhz. Requires sudo rights. '''
     # Turn off cpu turbo and power savings
     if enable:
         if cfgTuning['use_turboctl']:
-            runcommand('sudo /usr/bin/turboctl off', silent=1)
+            runcommand(f"sudo {turboctl_exe} off", silent=1)
         if cfgTuning['use_cpupower']:
-            runcommand(f"sudo /usr/bin/cpupower frequency-set -g performance --min {cfgTuning['cpu_bench_speed']*1000} --max {cfgTuning['cpu_bench_speed']*1000}", silent=1)
-            runcommand('sudo /usr/bin/cpupower idle-set -D 2', silent=1)
+            runcommand(f"sudo {cpupower_exe} frequency-set -g performance --min {cfgTuning['cpu_bench_speed']*1000} --max {cfgTuning['cpu_bench_speed']*1000}", silent=1)
+            runcommand(f"sudo {cpupower_exe} idle-set -D 2", silent=1)
 
     # Turn cpu turbo and power savings back on
     if not enable:
         if cfgTuning['use_turboctl']:
-            runcommand('sudo /usr/bin/turboctl on')
+            runcommand(f"sudo {turboctl_exe} on")
         if cfgTuning['use_cpupower']:
-            runcommand(f"sudo /usr/bin/cpupower frequency-set --min {cfgTuning['cpu_std_minspeed']*1000} --max {cfgTuning['cpu_std_maxspeed']*1000}")
-            runcommand('sudo /usr/bin/cpupower idle-set -E')
+            runcommand(f"sudo {cpupower_exe} frequency-set --min {cfgTuning['cpu_std_minspeed']*1000} --max {cfgTuning['cpu_std_maxspeed']*1000}")
+            runcommand(f"sudo {cpupower_exe} idle-set -E")
 
 def findfile(filename,fatal=True):
     ''' Search for filename in CWD, homedir and deflatebench.py-dir '''

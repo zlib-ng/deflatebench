@@ -21,33 +21,16 @@ from includes import util
 # Simple usleep function
 usleep = lambda x: time.sleep(x/1000000.0)
 
-def command_prefix(filen):
-    ''' Build the benchmarking command prefix '''
-    if cfgTuning['use_chrt']:
-        command = "/usr/bin/chrt -f 99"
-    else:
-        command = "/usr/bin/nice -n -20"
-
-    if cfgConfig['use_perf']:
-        command += f" /usr/bin/perf stat -D {cfgConfig['start_delay']} -e cpu-clock:u -o '{filen}' -- "
-    else:
-        timeformat="%U"
-        command += f" -20 /usr/bin/time -o {timefile} -f '{timeformat}' -- "
-
-    return command
-
-def runtest(tempfiles,level):
+def runtest(tempfiles, level, cmdprefix):
     ''' Run benchmark and tests for current compression level'''
     hashfail, decomptime = 0,0
     testfile = tempfiles[level]['filename']
     orighash = tempfiles[level]['hash']
-    cmdprefix = ''
 
     env = util.get_env(True)
 
     sys.stdout.write(f"Testing level {level}: ")
     if sys.platform != 'win32':
-        cmdprefix = command_prefix(timefile)
         util.runcommand('sync')
 
     # Compress
@@ -100,8 +83,7 @@ def runtest(tempfiles,level):
     os.unlink(compfile)
 
     comppct = float(compsize*100)/tempfiles[level]['origsize']
-    cli.printnn(f" {comptime:7.4f} {decomptime:7.4f} {compsize:15,} {comppct:7.3f}%")
-    cli.printnn('\n')
+    cli.printnn(f" {comptime:7.4f} {decomptime:7.4f} {compsize:15,} {comppct:7.3f}%\n")
 
     return compsize,comptime,decomptime,hashfail
 
@@ -272,6 +254,9 @@ def benchmain():
 
     tempfiles = dict()
 
+    # Detect external tools
+    util.find_tools(timefile, use_prio=cfgTuning['use_prio'], use_perf=cfgConfig['use_perf'], use_turboctl=cfgTuning['use_turboctl'], use_cpupower=cfgTuning['use_cpupower'])
+
     # Single testfile, we just reference the same file for every level
     if cfgRuns['testmode'] == 'single':
         tmp_filename = os.path.join(cfgConfig['temp_path'], "deflatebench.tmp")
@@ -325,7 +310,7 @@ def benchmain():
 
         print(f"Starting run {run} of {cfgRuns['runs']}")
         for level in map(str, getlevels()):
-            compsize,comptime,decomptime,hashfail = runtest(tempfiles,level)
+            compsize,comptime,decomptime,hashfail = runtest(tempfiles, level, util.cmdprefix)
             if hashfail != 0:
                 print(f"ERROR: level {level} failed crc checking")
             results[level].append( [compsize,comptime,decomptime] )
