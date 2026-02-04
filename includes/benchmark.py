@@ -10,52 +10,61 @@ import os
 import sys
 import time
 
-from . import cli
 from . import util
+
+from .cli import printnn
 
 # Simple usleep function
 usleep = lambda x: time.sleep(x/1000000.0)
 
-def runtest(testtool, benchmode, temp_path, tempfiles, timefile, level, cmdprefix, skipdecomp, skipverify):
-    ''' Run benchmark and tests for current compression level'''
+def printfile(level, filename):
+    ''' Prints formatted information about file '''
+    filesize = os.path.getsize(filename)
+    print(f"Level {level}: {filename} {filesize/1024/1024:6.1f} MiB  {filesize:12,} B")
+
+def run_timed(command, env, timefile, timemode, outfile):
+    ''' Run command and return the elapsed cputime (or realtime if unavailable) '''
+    starttime = time.perf_counter()
+    util.runcommand(command, env=env, output=outfile)
+
+    if timemode == 'python':
+        return time.perf_counter() - starttime
+
+    return util.parse_timefile(timefile)
+
+def runtest(testtool, timemode, do_compress, do_decompress, temp_path, tempfiles, timefile, level, cmdprefix, skipverify):
+    ''' Run benchmark and tests for current compression level '''
     # Prepare tempfiles
     compfile = os.path.join(temp_path, 'zlib-testfil.gz')
     decompfile = os.path.join(temp_path, 'zlib-testfil.raw')
 
-    hashfail, decomptime = 0,0
+    hashfail, comptime, decomptime = 0, 0, 0
     testfile = tempfiles[level]['filename']
     orighash = tempfiles[level]['hash']
 
     env = util.get_env(True)
+    testtool = os.path.realpath(testtool)
 
     sys.stdout.write(f"Testing level {level}: ")
     if sys.platform != 'win32':
-        util.runcommand('sync')
+        os.sync()
 
     # Compress
-    cli.printnn('c')
-    usleep(10)
-    starttime = time.perf_counter()
-    testtool = os.path.realpath(testtool)
-
-    util.runcommand(f"{cmdprefix} {testtool} -{level} -c {testfile}", env=env, output=compfile)
-    if benchmode == 'python':
-        comptime = time.perf_counter() - starttime
+    if do_compress:
+        printnn('c')
+        usleep(10)
+        comptime = run_timed(f"{cmdprefix} {testtool} -{level} -c {testfile}", env, timefile, timemode, compfile)
     else:
-        comptime = util.parse_timefile(timefile)
+        # compression disabled, just pass the file on to decompress
+        compfile = testfile
+
     compsize = os.path.getsize(compfile)
 
     # Decompress
-    if not skipdecomp or not skipverify:
-        cli.printnn('d')
+    if do_decompress or not skipverify:
+        printnn('d')
         usleep(10)
-        starttime = time.perf_counter()
-        util.runcommand(f"{cmdprefix} {testtool} -d -c {compfile}", env=env, output=decompfile)
-
-        if benchmode == 'python':
-            decomptime = time.perf_counter() - starttime
-        else:
-            decomptime = util.parse_timefile(timefile)
+        decomptime = run_timed(f"{cmdprefix} {testtool} -d -c {compfile}", env, timefile, timemode, decompfile)
 
         if not skipverify:
             ourhash = util.hashfile(decompfile)
@@ -66,8 +75,8 @@ def runtest(testtool, benchmode, temp_path, tempfiles, timefile, level, cmdprefi
         os.unlink(decompfile)
 
     # Validate using gunzip
-    if not skipverify:
-        cli.printnn('v')
+    if do_compress and not skipverify:
+        printnn('v')
         util.runcommand(f"gunzip -c {compfile}", output=decompfile)
 
         gziphash = util.hashfile(decompfile)
@@ -77,11 +86,17 @@ def runtest(testtool, benchmode, temp_path, tempfiles, timefile, level, cmdprefi
 
         os.unlink(decompfile)
 
+    # Cleanup
     if os.path.exists(timefile):
         os.unlink(timefile)
-    os.unlink(compfile)
+    if do_compress:
+        os.unlink(compfile)
 
     comppct = float(compsize*100)/tempfiles[level]['origsize']
-    cli.printnn(f" {comptime:7.4f} {decomptime:7.4f} {compsize:15,} {comppct:7.3f}%\n")
+    if do_compress:
+        printnn(f" {comptime:7.4f}s")
+    if do_decompress:
+        printnn(f" {decomptime:7.4f}s")
+    print(f" {compsize:15,}B {comppct:7.3f}%")
 
     return compsize,comptime,decomptime,hashfail
