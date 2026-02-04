@@ -115,7 +115,7 @@ def calculate(results, tempfiles):
         res_totals['avgcomptime2'] = totcomptime2/((numlevels-1)*numresults)
 
     # Decompression
-    if cfgConfig['skipdecomp']:
+    if not do_decompress:
         res_totals['totdecomptime'] = totdecomptime
         res_totals['avgdecomptime'], res_totals['avgdecompstr'], res_totals['totdecompstr'] = [''] * 3
         res_totals['avgdecomptime2'], res_totals['avgdecompstr2'], res_totals['totdecompstr2'] = [''] * 3
@@ -144,43 +144,61 @@ def printinfo():
 def printreport(comp,decomp,totals):
     ''' Print results table '''
     # Print header
-    if cfgConfig['skipdecomp']:
+    if not do_compress:
+        print(" Level   Comp    Decomptime min/avg/max/stddev  Compressed size")
+    elif not do_decompress:
         print(" Level   Comp   Comptime min/avg/max/stddev   Compressed size")
     else:
         print(" Level   Comp   Comptime min/avg/max/stddev  Decomptime min/avg/max/stddev  Compressed size")
 
     for level in map(str, getlevels()):
         # Print level results
-        compstr = cli.resultstr(comp[level],28)
+        compstr = ""
         decompstr = ""
-        if not cfgConfig['skipdecomp']:
+
+        if do_compress:
+            compstr = cli.resultstr(comp[level],28)
+        if do_decompress:
             decompstr = cli.resultstr(decomp[level],30)
 
         print(f" {level:5}{comp[level]['avgpct']:7.3f}% {compstr} {decompstr}  {comp[level]['compsize']:15,}")
 
     # Print totals
-    print(f"\n {'avg1':5}{totals['avgcomppct']:7.3f}% {totals['avgcomptime']:28.4f} {totals['avgdecompstr']:>30}")
-    if cfgRuns['minlevel'] == 0:
-        print(f" {'avg2':5}{totals['avgcomppct2']:7.3f}% {totals['avgcomptime2']:28.4f} {totals['avgdecompstr2']:>30}")
+    if not do_decompress:
+        print(f"\n {'avg1':5}{totals['avgcomppct']:7.3f}%  {totals['avgdecompstr']:>30}")
+        if cfgRuns['minlevel'] == 0:
+            print(f" {'avg2':5}{totals['avgcomppct2']:7.3f}%  {totals['avgdecompstr2']:>30}")
 
-    if cfgConfig['skipdecomp']:
-        print(f" {'tot':5} {'':8}{totals['totcomptime']:28.4f}   {totals['totsize']:15,}")
+        print(f" {'tot':5}  {'':8}{totals['totdecompstr']:>30}  {totals['totsize']:15,}")
     else:
-        print(f" {'tot':5} {'':8}{totals['totcomptime']:28.4f} {totals['totdecompstr']:>30}  {totals['totsize']:15,}")
+        print(f"\n {'avg1':5}{totals['avgcomppct']:7.3f}% {totals['avgcomptime']:28.4f} {totals['avgdecompstr']:>30}")
+        if cfgRuns['minlevel'] == 0:
+            print(f" {'avg2':5}{totals['avgcomppct2']:7.3f}% {totals['avgcomptime2']:28.4f} {totals['avgdecompstr2']:>30}")
 
-def printfile(level,filename):
-    ''' Prints formatted information about file '''
-    filesize = os.path.getsize(filename)
-    print(f"Level {level}: {filename} {filesize/1024/1024:6.1f} MiB  {filesize:12,} B")
+        if not do_decompress:
+            print(f" {'tot':5} {'':8}{totals['totcomptime']:28.4f}   {totals['totsize']:15,}")
+        else:
+            print(f" {'tot':5} {'':8}{totals['totcomptime']:28.4f} {totals['totdecompstr']:>30}  {totals['totsize']:15,}")
 
 def benchmain():
     ''' Main benchmarking function '''
+    global do_compress, do_decompress
     tempfiles = dict()
 
     timefile = os.path.join(cfgConfig['temp_path'], 'zlib-time.tmp')
 
+    if cfgConfig['benchmark'] == 'compress':
+        do_compress = True
+        do_decompress = False
+    elif cfgConfig['benchmark'] == 'decompress':
+        do_compress = False
+        do_decompress = True
+    else:
+        do_compress = True
+        do_decompress = True
+
     # Detect external tools
-    benchmode = util.find_tools(timefile, use_prio=cfgTuning['use_prio'], use_perf=cfgConfig['use_perf'],
+    timemode = util.find_tools(timefile, use_prio=cfgTuning['use_prio'], use_perf=cfgConfig['use_perf'],
                                 use_turboctl=cfgTuning['use_turboctl'], use_cpupower=cfgTuning['use_cpupower'])
 
     printinfo()
@@ -192,8 +210,8 @@ def benchmain():
         shutil.copyfile(srcfile,tmp_filename)
         tmp_hash = util.hashfile(tmp_filename)
         origsize = os.path.getsize(tmp_filename)
-        print("\nActivated single file mode")
-        printfile(f"{cfgRuns['minlevel']}-{cfgRuns['maxlevel']}", srcfile)
+        print("Activated single file mode")
+        benchmark.printfile(f"{cfgRuns['minlevel']}-{cfgRuns['maxlevel']}", srcfile)
 
         for level in map(str, getlevels()):
             tempfiles[level] = dict()
@@ -215,10 +233,10 @@ def benchmain():
             if cfgRuns['testmode'] == 'multi':
                 srcfile = util.findfile(cfgMulti[level])
                 shutil.copyfile(srcfile,tmp_filename)
-                printfile(f"{level}", srcfile)
+                benchmark.printfile(f"{level}", srcfile)
             else:
                 util.generate_testfile(util.findfile(cfgGen['srcFile']),tmp_filename,cfgGen[level])
-                printfile(f"{level}", tmp_filename)
+                benchmark.printfile(f"{level}", tmp_filename)
 
             tempfiles[level]['hash'] = util.hashfile(tmp_filename)
             tempfiles[level]['origsize'] = os.path.getsize(tmp_filename)
@@ -231,6 +249,22 @@ def benchmain():
     for level in map(str, getlevels()):
         results[level] = []
 
+    # Prepare compressed files when only benchmarking decompress
+    if not do_compress and cfgRuns['testmode'] != 'multi':
+        cli.printnn("Compressing tempfiles for decompression test ")
+        if cfgRuns['testmode'] == 'single':
+            srcfile = cfgSingle['testfile']
+        else: # gen
+            srcfile = cfgGen['srcFile']
+        compfile = util.findfile(srcfile)
+
+        for level in map(str, getlevels()):
+            testtool = os.path.realpath(cfgRuns['testtool'])
+            tmp_compfile = os.path.join(cfgConfig['temp_path'], f"{os.path.basename(srcfile)}-{level}.gz")
+            util.runcommand(f"{testtool} -{level} -c {tempfiles[level]['filename']}", output=tmp_compfile)
+            tempfiles[level]['filename'] = tmp_compfile
+            cli.printnn('.')
+
     # Run tests and record results
     for run in range(1,cfgRuns['runs']+1):
         if run != 1:
@@ -238,9 +272,9 @@ def benchmain():
 
         print(f"Starting run {run} of {cfgRuns['runs']}")
         for level in map(str, getlevels()):
-            compsize,comptime,decomptime,hashfail = benchmark.runtest(cfgRuns['testtool'], benchmode, cfgConfig['temp_path'],
+            compsize,comptime,decomptime,hashfail = benchmark.runtest(cfgRuns['testtool'], timemode, do_compress, do_decompress, cfgConfig['temp_path'],
                                                                       tempfiles, timefile, level, util.cmdprefix,
-                                                                      cfgConfig['skipdecomp'], cfgConfig['skipverify'])
+                                                                      cfgConfig['skipverify'])
             if hashfail != 0:
                 print(f"ERROR: level {level} failed crc checking")
             results[level].append( [compsize,comptime,decomptime] )
@@ -271,7 +305,7 @@ def main():
     parser.add_argument('-m','--multi', help='Activate testmode "Multi".', action='store_true')
     parser.add_argument('-g','--gen', help='Activate testmode "Generate".', action='store_true')
     parser.add_argument('-l','--testtool', help='Path to test tool.', action='store')
-    parser.add_argument('--skipdecomp', help='Skip decompression benchmarks.', action='store_true')
+    parser.add_argument('--benchmark', choices=['both','compress','decompress'], help='By default, benchmark both compress and decompress.', action='store')
     parser.add_argument('--skipverify', help='Skip verifying compressed files with system gzip.', action='store_true')
     args = parser.parse_args()
 
@@ -285,7 +319,6 @@ def main():
         else:
             print(f"ERROR: {defconfig_path} already exists, not overwriting.")
         sys.exit(1)
-
 
     # Load defconfig, then potentially override with values from config file
     cfg = config.defconfig()
@@ -352,8 +385,10 @@ def main():
         print(f"Error, unable to find '{cfgRuns['testtool']}' in current directory, did you forget to compile?")
         sys.exit(1)
 
-    if args.skipdecomp:
-        cfgConfig['skipdecomp'] = True
+    if args.benchmark == 'decompress':
+        cfgConfig['benchmark'] = 'decompress'
+    elif args.benchmark == 'compress':
+        cfgConfig['benchmark'] = 'compress'
 
     if args.skipverify:
         cfgConfig['skipverify'] = True

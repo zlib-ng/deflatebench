@@ -22,7 +22,7 @@ def defconfig():
     config['Config'] = {'temp_path': tempfile.gettempdir(),
                         'use_perf': True,
                         'skipverify': False,
-                        'skipdecomp': False}
+                        'benchmark': 'both'} # both / compress / decompress
 
     ## CPU related settings
     config['Tuning'] = {'use_prio': True,
