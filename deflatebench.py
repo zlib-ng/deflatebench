@@ -130,22 +130,24 @@ def calculate(results, tempfiles):
 
     return res_comp, res_decomp, res_totals
 
-def printreport(comp,decomp,totals):
-    ''' Print results table '''
-    # Print config info
-
-    print("\n")
+def printinfo():
+    ''' Prints system and configuration info '''
+    print("")
     util.printsysinfo()
+    print("")
     print(f"Tool: {cfgRuns['testtool']} Size: {os.path.getsize(cfgRuns['testtool']):,} B")
     levelrange = f"{cfgRuns['minlevel']}-{cfgRuns['maxlevel']}"
     print(f"Levels: {levelrange:10}")
     print(f"Runs: {str(cfgRuns['runs']):10} Trim worst: {str(cfgRuns['trimworst']):10}")
+    print("")
 
+def printreport(comp,decomp,totals):
+    ''' Print results table '''
     # Print header
     if cfgConfig['skipdecomp']:
-        print("\n Level   Comp   Comptime min/avg/max/stddev   Compressed size")
+        print(" Level   Comp   Comptime min/avg/max/stddev   Compressed size")
     else:
-        print("\n Level   Comp   Comptime min/avg/max/stddev  Decomptime min/avg/max/stddev  Compressed size")
+        print(" Level   Comp   Comptime min/avg/max/stddev  Decomptime min/avg/max/stddev  Compressed size")
 
     for level in map(str, getlevels()):
         # Print level results
@@ -181,9 +183,7 @@ def benchmain():
     benchmode = util.find_tools(timefile, use_prio=cfgTuning['use_prio'], use_perf=cfgConfig['use_perf'],
                                 use_turboctl=cfgTuning['use_turboctl'], use_cpupower=cfgTuning['use_cpupower'])
 
-    util.printsysinfo()
-    print(f"Tool: {cfgRuns['testtool']} Size: {os.path.getsize(cfgRuns['testtool']):,} B")
-    print(f"Timings mode: {benchmode}")
+    printinfo()
 
     # Single testfile, we just reference the same file for every level
     if cfgRuns['testmode'] == 'single':
@@ -246,6 +246,8 @@ def benchmain():
             results[level].append( [compsize,comptime,decomptime] )
 
     res_comp,res_decomp,res_totals = calculate(results, tempfiles)
+
+    printinfo()
     printreport(res_comp,res_decomp,res_totals)
 
     # Disable system tweaks to restore normal powersaving, turbo, etc

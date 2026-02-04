@@ -31,9 +31,24 @@ def get_env(bench=False):
 
 def printsysinfo():
     ''' Print system information '''
+    cpudata = None
     uname = platform.uname()
-    print(f"\nOS: {uname.system} {uname.release} {uname.version} {uname.machine}")
-    print(f"CPU: {platform.processor()}")
+    print(f"Platform: {platform.system()} {platform.machine()}")
+    print(f"OS: {uname.system} {uname.release} {uname.version} {uname.machine}")
+    try:
+        import cpuinfo
+        cpudata = cpuinfo.get_cpu_info()
+        print(f"CPU: {cpudata['brand_raw']}")
+        print(f"     cpu family: {cpudata['family']}, model: {cpudata['model']}, stepping: {cpudata['stepping']}")
+    except ImportError:
+        pass
+
+    if not cpudata:
+        if platform.processor():
+            print(f"CPU: {platform.processor()}")
+            print("  Detailed cpuinfo unavailable (needs python3-cpuinfo)")
+        else:
+            print("CPU: cpuinfo unavailable (needs python3-cpuinfo)")
 
 def find_tools(timefile, use_prio=True, use_perf=True, use_turboctl=True, use_cpupower=False):
     global cmdprefix, chrt_exe, nice_exe, perf_exe, time_exe, turboctl_exe, cpupower_exe
