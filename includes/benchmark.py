@@ -22,6 +22,31 @@ def printfile(level, filename):
     filesize = os.path.getsize(filename)
     print(f"Level {level}: {filename} {filesize/1024/1024:6.1f} MiB  {filesize:12,} B")
 
+def parse_levels(level_string):
+    ''' Parse string containing comma-separated levels or level ranges '''
+    if not level_string or not level_string.strip():
+        raise ValueError("Levels string is empty")
+    levels = set()
+
+    try:
+        for part in level_string.split(','):
+            part = part.strip()
+            if not part:
+                continue
+
+            if '-' in part:
+                start, end = part.split('-', 1)
+                start, end = int(start), int(end)
+                if start > end:
+                    start, end = end, start
+                levels.update(range(start, end + 1))
+            else:
+                levels.add(int(part))
+    except ValueError as exc:
+        raise ValueError(f"Invalid level: '{part}'") from exc
+
+    return sorted(levels)
+
 def run_timed(command, env, timefile, timemode, outfile):
     ''' Run command and return the elapsed cputime (or realtime if unavailable) '''
     starttime = time.perf_counter()

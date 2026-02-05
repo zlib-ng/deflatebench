@@ -13,10 +13,9 @@ def defconfig():
     config = dict()
     config['Testruns'] = {  'runs': 15,
                             'trimworst': 5,
-                            'minlevel': 0,
-                            'maxlevel': 9,
-                            'strategies': '', # fhRF
-                            'testmode': 'single',  # generate / multi / single
+                            'levels': '1-8,9',       # comma-separated list of levels and/or ranges
+                            'strategy': '',          # TODO: Placeholder for now
+                            'testmode': 'single',    # generate / multi / single
                             'testtool': 'minigzip' } # minigzip / minideflate
 
     config['Config'] = {'temp_path': tempfile.gettempdir(),

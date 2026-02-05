@@ -20,18 +20,14 @@ from includes import util
 
 from includes.cli import printnn
 
+levels = None
+
 def trimworst(results):
     ''' Trim X worst results '''
     results.sort()
     if not cfgRuns['trimworst']:
         return results
     return results[:-cfgRuns['trimworst']]
-
-def getlevels():
-    levels = list(range(cfgRuns['minlevel'],cfgRuns['maxlevel']+1))
-    for strategy in cfgRuns['strategies']:
-        levels.append(strategy)
-    return levels
 
 def calculate(results, tempfiles):
     ''' Calculate benchmark results '''
@@ -41,10 +37,10 @@ def calculate(results, tempfiles):
     res_comp, res_totals = dict(), dict()
 
     numresults = cfgRuns['runs'] - cfgRuns['trimworst']
-    numlevels = len(getlevels())
+    numlevels = len(levels)
 
     # Calculate and print stats per level
-    for level in map(str, getlevels()):
+    for level in levels:
         origsize = tempfiles[level]['origsize']
         comp = dict()
 
@@ -97,11 +93,12 @@ def calculate(results, tempfiles):
 
     # Averages/Totals
     res_totals['tottime'] = totcomptime
-    res_totals['avgpct'] = totcomppct/numlevels
-    res_totals['avgtime'] = totcomptime/(numlevels*numresults)
-    if cfgRuns['minlevel'] == 0:
-        res_totals['avgpct2'] = totcomppct2/(numlevels-1)
-        res_totals['avgtime2'] = totcomptime2/((numlevels-1)*numresults)
+    if numlevels > 1:
+        res_totals['avgpct'] = totcomppct/numlevels
+        res_totals['avgtime'] = totcomptime/(numlevels*numresults)
+        if 0 in levels:
+            res_totals['avgpct2'] = totcomppct2/(numlevels-1)
+            res_totals['avgtime2'] = totcomptime2/((numlevels-1)*numresults)
 
     return res_comp, res_totals
 
@@ -111,7 +108,7 @@ def printinfo():
     util.printsysinfo()
     print("")
     print(f"Tool: {cfgRuns['testtool']} Size: {os.path.getsize(cfgRuns['testtool']):,} B")
-    levelrange = f"{cfgRuns['minlevel']}-{cfgRuns['maxlevel']}"
+    levelrange = ','.join(map(str, levels))
     print(f"Levels: {levelrange:10}")
     print(f"Runs: {str(cfgRuns['runs']):10} Trim worst: {str(cfgRuns['trimworst']):10}")
     print("")
@@ -144,7 +141,7 @@ def printreport(comp,decomp,comp_tot,decomp_tot):
     print_resultline('Level', 'Comp', 'Comptime min/avg/max/stddev', 'Decomptime min/avg/max/stddev', 'Compressed size')
 
     # Print level results
-    for level in map(str, getlevels()):
+    for level in levels:
         compstr, decompstr = '', ''
 
         if do_compress:
@@ -156,16 +153,18 @@ def printreport(comp,decomp,comp_tot,decomp_tot):
 
     # Print totals
     print('')
-    print_resultline('avg1', comp_tot['avgpct'], f"{comp_tot['avgtime']:.4f}", f"{decomp_tot['avgtime']:.4f}")
-    if cfgRuns['minlevel'] == 0:
-        print_resultline('avg2', comp_tot['avgpct2'], f"{comp_tot['avgtime2']:.4f}", f"{decomp_tot['avgtime2']:.4f}")
-    print('')
+    if len(levels) > 1:
+        print_resultline('avg1', comp_tot['avgpct'], f"{comp_tot['avgtime']:.4f}", f"{decomp_tot['avgtime']:.4f}")
+        if 0 in levels:
+            print_resultline('avg2', comp_tot['avgpct2'], f"{comp_tot['avgtime2']:.4f}", f"{decomp_tot['avgtime2']:.4f}")
+        print('')
 
 def benchmain():
     ''' Main benchmarking function '''
-    global do_compress, do_decompress
+    global do_compress, do_decompress, levels
     tempfiles = dict()
 
+    levels = benchmark.parse_levels(cfgRuns['levels'])
     timefile = os.path.join(cfgConfig['temp_path'], 'zlib-time.tmp')
 
     if cfgConfig['benchmark'] == 'compress':
@@ -192,9 +191,9 @@ def benchmain():
         tmp_hash = util.hashfile(tmp_filename)
         origsize = os.path.getsize(tmp_filename)
         print("Activated single file mode")
-        benchmark.printfile(f"{cfgRuns['minlevel']}-{cfgRuns['maxlevel']}", srcfile)
+        benchmark.printfile(','.join(map(str, levels)), srcfile)
 
-        for level in map(str, getlevels()):
+        for level in levels:
             tempfiles[level] = dict()
             tempfiles[level]['filename'] = tmp_filename
             tempfiles[level]['hash'] = tmp_hash
@@ -206,13 +205,13 @@ def benchmain():
         else:
             print(f"\nActivated multiple generated file mode. Source: {cfgGen['srcFile']}")
 
-        for level in map(str, getlevels()):
+        for level in map(str, levels):  # level is str for access Gen/Multi configs
             tempfiles[level] = dict()
             tmp_filename = os.path.join(cfgConfig['temp_path'], f"deflatebench-{level}.tmp")
             tempfiles[level]['filename'] = tmp_filename
 
             if cfgRuns['testmode'] == 'multi':
-                srcfile = util.findfile(cfgMulti[level])
+                srcfile = util.findfile(cfgMulti[level))
                 shutil.copyfile(srcfile,tmp_filename)
                 benchmark.printfile(f"{level}", srcfile)
             else:
@@ -228,7 +227,7 @@ def benchmain():
     # Prepare multilevel results array
     calc_comp, calc_comptot, calc_decomp, calc_decomptot = None, None, None, None
     result_comp, result_decomp = dict(), dict()
-    for level in map(str, getlevels()):
+    for level in map(str, levels):
         result_comp[level] = []
         result_decomp[level] = []
 
@@ -241,7 +240,7 @@ def benchmain():
             srcfile = cfgGen['srcFile']
         compfile = util.findfile(srcfile)
 
-        for level in map(str, getlevels()):
+        for level in levels:
             testtool = os.path.realpath(cfgRuns['testtool'])
             tmp_compfile = os.path.join(cfgConfig['temp_path'], f"{os.path.basename(srcfile)}-{level}.gz")
             util.runcommand(f"{testtool} -{level} -c {tempfiles[level]['filename']}", output=tmp_compfile)
@@ -255,7 +254,7 @@ def benchmain():
             cfgConfig['skipverify'] = True
 
         print(f"Starting run {run} of {cfgRuns['runs']}")
-        for level in map(str, getlevels()):
+        for level in map(str, levels):
             compsize,comptime,decomptime,hashfail = benchmark.runtest(cfgRuns['testtool'], timemode, do_compress, do_decompress, cfgConfig['temp_path'],
                                                                       tempfiles, timefile, level, util.cmdprefix,
                                                                       cfgConfig['skipverify'])
@@ -278,7 +277,7 @@ def benchmain():
     util.cputweak(False)
 
     # Clean up tempfiles
-    for level in map(str, getlevels()):
+    for level in levels:
         if os.path.isfile(tempfiles[level]['filename']):
             os.unlink(tempfiles[level]['filename'])
 
@@ -287,14 +286,15 @@ def main():
     global cfgRuns,cfgConfig,cfgTuning,cfgGen,cfgSingle,cfgMulti
 
     parser = argparse.ArgumentParser(description='deflatebench - A zlib-ng benchmarking utility. Please see config file for more options.')
-    parser.add_argument('-r','--runs', help='Number of benchmark runs.', type=int)
-    parser.add_argument('-t','--trimworst', help='Trim the N worst runs per level.', type=int)
     parser.add_argument('-p','--profile', help='Load config profile from config file: ~/deflatebench-[PROFILE].conf')
     parser.add_argument('--write-config', help='Write default configfile to ~/deflatebench.conf.', action='store_true')
+    parser.add_argument('-l','--levels', help='Comma separated list of levels or level ranges.', action='store')
+    parser.add_argument('-r','--runs', help='Number of benchmark runs.', type=int)
+    parser.add_argument('--trimworst', help='Trim the N worst runs per level.', type=int)
     parser.add_argument('-s','--single', help='Activate testmode "Single"', action='store_true')
     parser.add_argument('-m','--multi', help='Activate testmode "Multi".', action='store_true')
     parser.add_argument('-g','--gen', help='Activate testmode "Generate".', action='store_true')
-    parser.add_argument('-l','--testtool', help='Path to test tool.', action='store')
+    parser.add_argument('--testtool', help='Path to test tool.', action='store')
     parser.add_argument('--benchmark', choices=['both','compress','decompress'], help='By default, benchmark both compress and decompress.', action='store')
     parser.add_argument('--skipverify', help='Skip verifying compressed files with system gzip.', action='store_true')
     args = parser.parse_args()
@@ -345,6 +345,9 @@ def main():
     if cfgRuns['runs'] <= cfgRuns['trimworst']:
         print(f"Error, parameter 'runs={cfgRuns['runs']}' needs to be higher than parameter 'trimworst={cfgRuns['trimworst']}'")
         sys.exit(1)
+
+    if args.levels:
+        cfgRuns['levels'] = args.levels
 
     if args.single:
         cfgRuns['testmode'] = 'single'
