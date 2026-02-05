@@ -224,13 +224,6 @@ def benchmain():
     # Tweak system to reduce benchmark variance
     util.cputweak(True)
 
-    # Prepare multilevel results array
-    calc_comp, calc_comptot, calc_decomp, calc_decomptot = None, None, None, None
-    result_comp, result_decomp = dict(), dict()
-    for level in map(str, levels):
-        result_comp[level] = []
-        result_decomp[level] = []
-
     # Prepare compressed files when only benchmarking decompress
     if not do_compress and cfgRuns['testmode'] != 'multi':
         printnn("Compressing tempfiles for decompression test ")
@@ -248,28 +241,32 @@ def benchmain():
             printnn('.')
         print('')
 
-    # Run tests and record results
-    for run in range(1,cfgRuns['runs']+1):
-        if run != 1:
-            cfgConfig['skipverify'] = True
+    # Prepare testconfig dict
+    testconfig = dict()
+    testconfig['runs'] = cfgRuns['runs']
+    testconfig['levels'] = levels
+    testconfig['skipverify'] = cfgConfig['skipverify']
+    testconfig['timemode'] = timemode
+    testconfig['timefile'] = timefile
+    testconfig['cmdprefix'] = util.cmdprefix
+    testconfig['testtool'] = os.path.realpath(cfgRuns['testtool'])
+    testconfig['do_compress'] = do_compress
+    testconfig['do_decompress'] = do_decompress
+    testconfig['tempfiles'] = tempfiles
+    testconfig['temp_path'] = cfgConfig['temp_path']
 
-        print(f"Starting run {run} of {cfgRuns['runs']}")
-        for level in map(str, levels):
-            compsize,comptime,decomptime,hashfail = benchmark.runtest(cfgRuns['testtool'], timemode, do_compress, do_decompress, cfgConfig['temp_path'],
-                                                                      tempfiles, timefile, level, util.cmdprefix,
-                                                                      cfgConfig['skipverify'])
-            if hashfail != 0:
-                print(f"ERROR: level {level} failed crc checking")
-            if do_compress:
-                result_comp[level].append( [compsize,comptime] )
-            if do_decompress:
-                result_decomp[level].append( [compsize,decomptime] )
+    # Run tests and record results
+    result_comp,result_decomp = benchmark.run_tests(testconfig)
+
+    # Calculate statistics
+    calc_comp, calc_comptot, calc_decomp, calc_decomptot = None, None, None, None
 
     if do_compress:
         calc_comp,calc_comptot = calculate(result_comp, tempfiles)
     if do_decompress:
         calc_decomp,calc_decomptot = calculate(result_decomp, tempfiles)
 
+    # Print info and results
     printinfo()
     printreport(calc_comp,calc_decomp,calc_comptot,calc_decomptot)
 

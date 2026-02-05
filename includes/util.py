@@ -15,6 +15,8 @@ import subprocess
 import shlex
 import shutil
 
+from collections import namedtuple
+
 BUF_SIZE = 1024*1024  # lets read stuff in 1MB chunks when hashing or copying
 cmdprefix = ''
 
@@ -28,6 +30,9 @@ def get_env(bench=False):
     ''' Build dict of environment variables '''
     env = dict()
     return env
+
+def dict_to_namedt(dictionary):
+    return namedtuple('GenericDict', dictionary.keys())(**dictionary)
 
 def printsysinfo():
     ''' Print system information '''

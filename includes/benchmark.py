@@ -9,6 +9,7 @@
 import os
 import sys
 import time
+from collections import namedtuple
 
 from . import util
 
@@ -57,28 +58,53 @@ def run_timed(command, env, timefile, timemode, outfile):
 
     return util.parse_timefile(timefile)
 
-def runtest(testtool, timemode, do_compress, do_decompress, temp_path, tempfiles, timefile, level, cmdprefix, skipverify):
+def run_tests(testconfig):
+    cfg = util.dict_to_namedt(testconfig)
+    skipverify = cfg.skipverify
+
+    # Prepare multilevel results arrays
+    result_comp, result_decomp = dict(), dict()
+    for level in cfg.levels:
+        result_comp[level] = []
+        result_decomp[level] = []
+
+    # Run tests and record results
+    for run in range(1, cfg.runs + 1):
+        if run != 1:
+            skipverify = True
+
+        print(f"Starting run {run} of {cfg.runs}")
+        for level in cfg.levels:
+            compsize,comptime,decomptime,hashfail = run_test(cfg, level, skipverify)
+            if hashfail != 0:
+                print(f"ERROR: level {level} failed crc checking")
+            if cfg.do_compress:
+                result_comp[level].append( [compsize,comptime] )
+            if cfg.do_decompress:
+                result_decomp[level].append( [compsize,decomptime] )
+
+    return result_comp, result_decomp
+
+def run_test(cfg, level, skipverify):
     ''' Run benchmark and tests for current compression level '''
     # Prepare tempfiles
-    compfile = os.path.join(temp_path, 'zlib-testfil.gz')
-    decompfile = os.path.join(temp_path, 'zlib-testfil.raw')
-
     hashfail, comptime, decomptime = 0, 0, 0
-    testfile = tempfiles[level]['filename']
-    orighash = tempfiles[level]['hash']
-
     env = util.get_env(True)
-    testtool = os.path.realpath(testtool)
+    orighash = cfg.tempfiles[level]['hash']
+
+    testfile = cfg.tempfiles[level]['filename']
+    compfile = os.path.join(cfg.temp_path, 'zlib-testfil.gz')
+    decompfile = os.path.join(cfg.temp_path, 'zlib-testfil.raw')
 
     sys.stdout.write(f"Testing level {level}: ")
     if sys.platform != 'win32':
         os.sync()
 
     # Compress
-    if do_compress:
+    if cfg.do_compress:
         printnn('c')
         usleep(10)
-        comptime = run_timed(f"{cmdprefix} {testtool} -{level} -c {testfile}", env, timefile, timemode, compfile)
+        comptime = run_timed(f"{cfg.cmdprefix} {cfg.testtool} -{level} -c {testfile}", env, cfg.timefile, cfg.timemode, compfile)
     else:
         # compression disabled, just pass the file on to decompress
         compfile = testfile
@@ -86,10 +112,10 @@ def runtest(testtool, timemode, do_compress, do_decompress, temp_path, tempfiles
     compsize = os.path.getsize(compfile)
 
     # Decompress
-    if do_decompress or not skipverify:
+    if cfg.do_decompress or not skipverify:
         printnn('d')
         usleep(10)
-        decomptime = run_timed(f"{cmdprefix} {testtool} -d -c {compfile}", env, timefile, timemode, decompfile)
+        decomptime = run_timed(f"{cfg.cmdprefix} {cfg.testtool} -d -c {compfile}", env, cfg.timefile, cfg.timemode, decompfile)
 
         if not skipverify:
             ourhash = util.hashfile(decompfile)
@@ -100,7 +126,7 @@ def runtest(testtool, timemode, do_compress, do_decompress, temp_path, tempfiles
         os.unlink(decompfile)
 
     # Validate using gunzip
-    if do_compress and not skipverify:
+    if cfg.do_compress and not skipverify:
         printnn('v')
         util.runcommand(f"gunzip -c {compfile}", output=decompfile)
 
@@ -112,15 +138,15 @@ def runtest(testtool, timemode, do_compress, do_decompress, temp_path, tempfiles
         os.unlink(decompfile)
 
     # Cleanup
-    if os.path.exists(timefile):
-        os.unlink(timefile)
-    if do_compress:
+    if os.path.exists(cfg.timefile):
+        os.unlink(cfg.timefile)
+    if cfg.do_compress:
         os.unlink(compfile)
 
-    comppct = float(compsize*100)/tempfiles[level]['origsize']
-    if do_compress:
+    comppct = float(compsize*100)/cfg.tempfiles[level]['origsize']
+    if cfg.do_compress:
         printnn(f" {comptime:7.4f}s")
-    if do_decompress:
+    if cfg.do_decompress:
         printnn(f" {decomptime:7.4f}s")
     print(f" {compsize:15,}B {comppct:7.3f}%")
 
