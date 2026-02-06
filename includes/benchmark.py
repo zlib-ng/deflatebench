@@ -18,10 +18,13 @@ from .cli import printnn
 # Simple usleep function
 usleep = lambda x: time.sleep(x/1000000.0)
 
-def printfile(level, filename):
+def printfile(level, filename, comment=None):
     ''' Prints formatted information about file '''
     filesize = os.path.getsize(filename)
-    print(f"Level {level}: {filename} {filesize/1024/1024:6.1f} MiB  {filesize:12,} B")
+    printnn(f"Level {level}: {filename} {filesize/1024/1024:6.1f} MiB  {filesize:12,} B")
+    if comment:
+        printnn(f" {comment}")
+    print('')
 
 def parse_levels(level_string):
     ''' Parse string containing comma-separated levels or level ranges '''
@@ -88,13 +91,19 @@ def run_tests(testconfig):
 def run_test(cfg, level, skipverify):
     ''' Run benchmark and tests for current compression level '''
     # Prepare tempfiles
-    hashfail, comptime, decomptime = 0, 0, 0
+    hashfail, compsize, comptime, decomptime = 0, 0, 0, 0
     env = util.get_env(True)
-    orighash = cfg.tempfiles[level]['hash']
+    hash_comp = cfg.tempfiles[level]['hash_comp']
+    hash_decomp = cfg.tempfiles[level]['hash_decomp']
 
-    testfile = cfg.tempfiles[level]['filename']
-    compfile = os.path.join(cfg.temp_path, 'zlib-testfil.gz')
-    decompfile = os.path.join(cfg.temp_path, 'zlib-testfil.raw')
+    compress_in = cfg.tempfiles[level]['filename_comp']
+    compress_out = os.path.join(cfg.temp_path, 'zlib-testfil.gz')
+
+    if cfg.tempfiles[level]['filename_decomp'] is None:
+        decompress_in = compress_out
+    else:
+        decompress_in = cfg.tempfiles[level]['filename_decomp']
+    decompress_out = os.path.join(cfg.temp_path, 'zlib-testfil.raw')
 
     sys.stdout.write(f"Testing level {level}: ")
     if sys.platform != 'win32':
@@ -104,50 +113,47 @@ def run_test(cfg, level, skipverify):
     if cfg.do_compress:
         printnn('c')
         usleep(10)
-        comptime = run_timed(f"{cfg.cmdprefix} {cfg.testtool} -{level} -c {testfile}", env, cfg.timefile, cfg.timemode, compfile)
-    else:
-        # compression disabled, just pass the file on to decompress
-        compfile = testfile
-
-    compsize = os.path.getsize(compfile)
+        comptime = run_timed(f"{cfg.cmdprefix} {cfg.testtool} -{level} -c {compress_in}", env, cfg.timefile, cfg.timemode, compress_out)
+        compsize = os.path.getsize(compress_out)
 
     # Decompress
-    if cfg.do_decompress or not skipverify:
+    if cfg.do_decompress:
         printnn('d')
         usleep(10)
-        decomptime = run_timed(f"{cfg.cmdprefix} {cfg.testtool} -d -c {compfile}", env, cfg.timefile, cfg.timemode, decompfile)
+        decompsize = os.path.getsize(decompress_in)
+        decomptime = run_timed(f"{cfg.cmdprefix} {cfg.testtool} -d -c {decompress_in}", env, cfg.timefile, cfg.timemode, decompress_out)
 
         if not skipverify:
-            ourhash = util.hashfile(decompfile)
-            if ourhash != orighash:
-                print(f"{orighash} != {ourhash}")
+            ourhash = util.hashfile(decompress_out)
+            if ourhash != hash_decomp:
+                print(f"\ndecompress: {hash_decomp} != {ourhash}")
                 hashfail = 1
 
-        os.unlink(decompfile)
+        os.unlink(decompress_out)
 
     # Validate using gunzip
     if cfg.do_compress and not skipverify:
         printnn('v')
-        util.runcommand(f"gunzip -c {compfile}", output=decompfile)
+        util.runcommand(f"gunzip -c {compress_out}", output=decompress_out)
 
-        gziphash = util.hashfile(decompfile)
-        if gziphash != orighash:
-            print(f"{orighash} != {gziphash}")
+        gziphash = util.hashfile(decompress_out)
+        if gziphash != hash_comp:
+            print(f"\nverify: {hash_comp} != {gziphash}")
             hashfail = 1
 
-        os.unlink(decompfile)
+        os.unlink(decompress_out)
 
     # Cleanup
     if os.path.exists(cfg.timefile):
         os.unlink(cfg.timefile)
     if cfg.do_compress:
-        os.unlink(compfile)
+        os.unlink(compress_out)
 
-    comppct = float(compsize*100)/cfg.tempfiles[level]['origsize']
     if cfg.do_compress:
-        printnn(f" {comptime:7.4f}s")
+        comppct = float(compsize*100)/cfg.tempfiles[level]['origsize_comp']
+        printnn(f"  comp: {comptime:.4f}s {compsize}B {comppct:.3f}%")
     if cfg.do_decompress:
-        printnn(f" {decomptime:7.4f}s")
-    print(f" {compsize:15,}B {comppct:7.3f}%")
+        printnn(f"  decomp: {decomptime:.4f}s {decompsize}B")
+    print('')
 
     return compsize,comptime,decomptime,hashfail

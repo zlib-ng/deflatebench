@@ -32,7 +32,8 @@ def defconfig():
                         'cpu_bench_speed': 2000 }
 
     # Single testfile
-    config['Testdata_Single'] = { 'testfile': 'silesia.tar' }
+    config['Testdata_Single'] = { 'testfile_compress': 'silesia.tar',
+                                  'testfile_decompress': 'silesia.tar' }
 
     # Multiple testfiles
     config['Testdata_Multi'] = {'0': 'testfile-500M',

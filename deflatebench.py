@@ -29,7 +29,7 @@ def trimworst(results):
         return results
     return results[:-cfgRuns['trimworst']]
 
-def calculate(results, tempfiles):
+def calculate(results, tempfiles, is_compress):
     ''' Calculate benchmark results '''
     totsize, totsize2 = [0]*2
     totcomppct, totcomppct2 = [0]*2
@@ -41,7 +41,10 @@ def calculate(results, tempfiles):
 
     # Calculate and print stats per level
     for level in levels:
-        origsize = tempfiles[level]['origsize']
+        if is_compress:
+            origsize = tempfiles[level]['origsize_comp']
+        else:
+            origsize = tempfiles[level]['origsize_decomp']
         comp = dict()
 
         # Find best/worst times for this level
@@ -50,7 +53,7 @@ def calculate(results, tempfiles):
         for run in results[level]:
             rsize,rcompt = run
             rawcomptimes.append(rcompt)
-            if comp['compsize'] is not None and comp['compsize'] != rsize:
+            if is_compress and comp['compsize'] is not None and comp['compsize'] != rsize:
                 print(f"Warning: size changed between runs. Expected: {comp['compsize']} Got: {rsize}")
             else:
                 comp['compsize'] = rsize
@@ -163,6 +166,7 @@ def benchmain():
     ''' Main benchmarking function '''
     global do_compress, do_decompress, levels
     tempfiles = dict()
+    separate_files = False
 
     levels = benchmark.parse_levels(cfgRuns['levels'])
     timefile = os.path.join(cfgConfig['temp_path'], 'zlib-time.tmp')
@@ -183,21 +187,68 @@ def benchmain():
 
     printinfo()
 
-    # Single testfile, we just reference the same file for every level
+    for level in levels:
+        tempfiles[level] = dict()
+
+    # Single mode, we just reference the same file for every level
     if cfgRuns['testmode'] == 'single':
-        tmp_filename = os.path.join(cfgConfig['temp_path'], "deflatebench.tmp")
-        srcfile = util.findfile(cfgSingle['testfile'])
-        shutil.copyfile(srcfile,tmp_filename)
-        tmp_hash = util.hashfile(tmp_filename)
-        origsize = os.path.getsize(tmp_filename)
+        # filename_comp
+        if do_compress:
+            tmp_compress_in = os.path.join(cfgConfig['temp_path'], "deflatebench-comp.tmp")
+            srcfile_comp = util.findfile(cfgSingle['testfile_compress'])
+            shutil.copyfile(srcfile_comp,tmp_compress_in)
+            compress_hash = util.hashfile(tmp_compress_in)
+            compress_origsize = os.path.getsize(tmp_compress_in)
+        else:
+            tmp_compress_in = None
+            compress_hash = None
+            compress_origsize = None
+
+        # filename_decomp
+        if do_decompress:
+            tmp_decompress_in = os.path.join(cfgConfig['temp_path'], "deflatebench-decomp.tmp")
+            srcfile_decomp = util.findfile(cfgSingle['testfile_decompress'])
+            if do_compress and cfgSingle['testfile_compress'] == cfgSingle['testfile_decompress']:
+                tmp_decompress_in = None
+                decompress_hash = compress_hash
+                decompress_origsize = compress_origsize
+            else: # Use separate files for compress and decompress benchmarks
+                #shutil.copyfile(srcfile,tmp_decompress_in)
+                separate_files = True
+                decompress_hash = util.hashfile(srcfile_decomp)
+                decompress_origsize = os.path.getsize(srcfile_decomp)
+
+                # Prepare compressed files when only benchmarking decompress
+                printnn("Compressing tempfiles for decompression test ")
+                testtool = os.path.realpath(cfgRuns['testtool'])
+                for level in map(str, levels):
+                    tmp_decompress_in = os.path.join(cfgConfig['temp_path'], f"{os.path.basename(srcfile_decomp)}-{level}.gz")
+                    util.runcommand(f"{testtool} -{level} -c {srcfile_decomp}", output=tmp_decompress_in)
+                    tempfiles[level]['filename_decomp'] = tmp_decompress_in
+                    printnn('.')
+        else:
+            tmp_decompress_in = None
+            decompress_hash = None
+            decompress_origsize = None
+
         print("Activated single file mode")
-        benchmark.printfile(','.join(map(str, levels)), srcfile)
+        if separate_files:
+            if do_compress:
+                benchmark.printfile(','.join(map(str, levels)), srcfile_comp, 'Compression')
+            if do_decompress:
+                benchmark.printfile(','.join(map(str, levels)), srcfile_decomp, 'Decompression')
+        else:
+            benchmark.printfile(','.join(map(str, levels)), srcfile_comp)
+
 
         for level in levels:
-            tempfiles[level] = dict()
-            tempfiles[level]['filename'] = tmp_filename
-            tempfiles[level]['hash'] = tmp_hash
-            tempfiles[level]['origsize'] = origsize
+            tempfiles[level]['filename_comp'] = tmp_compress_in
+            if not separate_files:
+                tempfiles[level]['filename_decomp'] = tmp_decompress_in
+            tempfiles[level]['hash_comp'] = compress_hash
+            tempfiles[level]['hash_decomp'] = decompress_hash
+            tempfiles[level]['origsize_comp'] = compress_origsize
+            tempfiles[level]['origsize_decomp'] = decompress_origsize
     else:
         # Multiple testfiles
         if cfgRuns['testmode'] == 'multi':
@@ -205,41 +256,24 @@ def benchmain():
         else:
             print(f"\nActivated multiple generated file mode. Source: {cfgGen['srcFile']}")
 
-        for level in map(str, levels):  # level is str for access Gen/Multi configs
-            tempfiles[level] = dict()
+        for level in levels:
             tmp_filename = os.path.join(cfgConfig['temp_path'], f"deflatebench-{level}.tmp")
-            tempfiles[level]['filename'] = tmp_filename
+            tempfiles[level]['filename_comp'] = tmp_filename
+            tempfiles[level]['filename_decomp'] = None
 
             if cfgRuns['testmode'] == 'multi':
-                srcfile = util.findfile(cfgMulti[level))
+                srcfile = util.findfile(cfgMulti[str(level)])
                 shutil.copyfile(srcfile,tmp_filename)
                 benchmark.printfile(f"{level}", srcfile)
             else:
-                util.generate_testfile(util.findfile(cfgGen['srcFile']),tmp_filename,cfgGen[level])
+                util.generate_testfile(util.findfile(cfgGen['srcFile']),tmp_filename,cfgGen[str(level)])
                 benchmark.printfile(f"{level}", tmp_filename)
 
             tempfiles[level]['hash'] = util.hashfile(tmp_filename)
-            tempfiles[level]['origsize'] = os.path.getsize(tmp_filename)
+            tempfiles[level]['origsize_comp'] = os.path.getsize(tmp_filename)
 
     # Tweak system to reduce benchmark variance
     util.cputweak(True)
-
-    # Prepare compressed files when only benchmarking decompress
-    if not do_compress and cfgRuns['testmode'] != 'multi':
-        printnn("Compressing tempfiles for decompression test ")
-        if cfgRuns['testmode'] == 'single':
-            srcfile = cfgSingle['testfile']
-        else: # gen
-            srcfile = cfgGen['srcFile']
-        compfile = util.findfile(srcfile)
-
-        for level in levels:
-            testtool = os.path.realpath(cfgRuns['testtool'])
-            tmp_compfile = os.path.join(cfgConfig['temp_path'], f"{os.path.basename(srcfile)}-{level}.gz")
-            util.runcommand(f"{testtool} -{level} -c {tempfiles[level]['filename']}", output=tmp_compfile)
-            tempfiles[level]['filename'] = tmp_compfile
-            printnn('.')
-        print('')
 
     # Prepare testconfig dict
     testconfig = dict()
@@ -262,9 +296,9 @@ def benchmain():
     calc_comp, calc_comptot, calc_decomp, calc_decomptot = None, None, None, None
 
     if do_compress:
-        calc_comp,calc_comptot = calculate(result_comp, tempfiles)
+        calc_comp,calc_comptot = calculate(result_comp, tempfiles, True)
     if do_decompress:
-        calc_decomp,calc_decomptot = calculate(result_decomp, tempfiles)
+        calc_decomp,calc_decomptot = calculate(result_decomp, tempfiles, False)
 
     # Print info and results
     printinfo()
@@ -275,8 +309,12 @@ def benchmain():
 
     # Clean up tempfiles
     for level in levels:
-        if os.path.isfile(tempfiles[level]['filename']):
-            os.unlink(tempfiles[level]['filename'])
+        filename_comp = tempfiles[level]['filename_comp']
+        if do_compress and os.path.isfile(filename_comp):
+            os.unlink(filename_comp)
+        filename_decomp = tempfiles[level]['filename_decomp']
+        if do_decompress and filename_decomp and os.path.isfile(filename_decomp):
+            os.unlink(filename_decomp)
 
 def main():
     ''' Main function handles command-line arguments and loading the correct config '''
@@ -291,6 +329,9 @@ def main():
     parser.add_argument('-s','--single', help='Activate testmode "Single"', action='store_true')
     parser.add_argument('-m','--multi', help='Activate testmode "Multi".', action='store_true')
     parser.add_argument('-g','--gen', help='Activate testmode "Generate".', action='store_true')
+    parser.add_argument('-f','--file', help='Path to test file to use for both comp/decomp (Single/Gen mode only).', action='store')
+    parser.add_argument('-x','--file-compress', help='Path to test file to use for compress (Single mode only).', action='store', dest='file_comp')
+    parser.add_argument('-y','--file-decompress', help='Path to test file to use for decompress (Single mode only).', action='store', dest='file_decomp')
     parser.add_argument('--testtool', help='Path to test tool.', action='store')
     parser.add_argument('--benchmark', choices=['both','compress','decompress'], help='By default, benchmark both compress and decompress.', action='store')
     parser.add_argument('--skipverify', help='Skip verifying compressed files with system gzip.', action='store_true')
@@ -363,6 +404,29 @@ def main():
         if args.single or args.multi:
             print("Error, parameter '--gen' conflicts with parameters '--single' and '--multi'")
             sys.exit(1)
+
+    # Handle testfile error cases
+    if args.file and (args.file_comp or args.file_decomp):
+        print("Error, parameter '--file' conflicts with parameters '--file-compress' and '--file-decompress'")
+        sys.exit(1)
+    elif (args.file_comp or args.file_decomp) and cfgRuns['testmode'] != 'single':
+        print("Error, parameters '--file-compress' and '--file-decompress' are only available with '--single'")
+        sys.exit(1)
+    elif args.file and cfgRuns['testmode'] == 'multi':
+        print("Error, parameter '--file' is not compatible with '--multi', please use config file.")
+        sys.exit(1)
+
+    # Handle testfile selection
+    if args.file:
+        cfgSingle['testfile_compress'] = args.file
+        cfgSingle['testfile_decompress'] = args.file
+        cfgGen['srcFile'] = args.file
+
+    if args.file_comp:
+        cfgSingle['testfile_compress'] = args.file_comp
+
+    if args.file_decomp:
+        cfgSingle['testfile_decompress'] = args.file_decomp
 
     if args.testtool:
         cfgRuns['testtool'] = args.testtool
