@@ -116,18 +116,24 @@ def printinfo():
     print(f"Runs: {str(cfgRuns['runs']):10} Trim worst: {str(cfgRuns['trimworst']):10}")
     print("")
 
-def print_resultline(header,pct,comp,decomp,size=None):
+def print_resultline(header,comp_pct,comp_size,comp,decomp_pct,decomp_size,decomp):
     printnn(f" {header:5}")
-    if isinstance(pct, float):
-        printnn(f"{pct:>7.3f}% ")
-    else:
-        printnn(f"{pct:>8} ")
     if do_compress:
-        printnn(f"{comp:>28} ")
+        if isinstance(comp_pct, float):
+            printnn(f"{comp_pct:>7.3f}% ")
+        else:
+            printnn(f"{comp_pct:>8} ")
+        printnn(f"{comp_size:>12} ")
+        printnn(f"{comp:>28}")
+    if do_compress and do_decompress:
+        printnn('  ')
     if do_decompress:
-        printnn(f"{decomp:>30} ")
-    if size is not None:
-        printnn(f" {size:15}")
+        if isinstance(decomp_pct, float):
+            printnn(f"{decomp_pct:>7.3f}% ")
+        else:
+            printnn(f"{decomp_pct:>8} ")
+        printnn(f"{decomp_size:>12} ")
+        printnn(f"{decomp:>30}")
     print('')
 
 def printreport(comp,decomp,comp_tot,decomp_tot):
@@ -141,7 +147,9 @@ def printreport(comp,decomp,comp_tot,decomp_tot):
         decomp_tot = comp_tot
 
     # Print header
-    print_resultline('Level', 'Comp', 'Comptime min/avg/max/stddev', 'Decomptime min/avg/max/stddev', 'Compressed size')
+    if do_compress and do_decompress:
+        print_resultline('', '|-     ', 'Compress', '-|', '|-     ', 'Decompress', '-|')
+    print_resultline('Level', 'Comp %', 'Out size', 'Comptime min/avg/max/stddev', 'Comp %', 'In size', 'Decomptime min/avg/max/stddev')
 
     # Print level results
     for level in levels:
@@ -152,14 +160,14 @@ def printreport(comp,decomp,comp_tot,decomp_tot):
         if do_decompress:
             decompstr = cli.resultstr(decomp[level],30)
 
-        print_resultline(level, comp[level]['avgpct'], compstr, decompstr, comp[level]['compsize'])
+        print_resultline(level, comp[level]['avgpct'], comp[level]['compsize'], compstr, decomp[level]['avgpct'], decomp[level]['compsize'], decompstr)
 
     # Print totals
     print('')
     if len(levels) > 1:
-        print_resultline('avg1', comp_tot['avgpct'], f"{comp_tot['avgtime']:.4f}", f"{decomp_tot['avgtime']:.4f}")
+        print_resultline('avg1', comp_tot['avgpct'], '', f"{comp_tot['avgtime']:.4f}", decomp_tot['avgpct'], '', f"{decomp_tot['avgtime']:.4f}")
         if 0 in levels:
-            print_resultline('avg2', comp_tot['avgpct2'], f"{comp_tot['avgtime2']:.4f}", f"{decomp_tot['avgtime2']:.4f}")
+            print_resultline('avg2', comp_tot['avgpct2'], '', f"{comp_tot['avgtime2']:.4f}", decomp_tot['avgpct2'], '', f"{decomp_tot['avgtime2']:.4f}")
         print('')
 
 def benchmain():
@@ -213,7 +221,6 @@ def benchmain():
                 decompress_hash = compress_hash
                 decompress_origsize = compress_origsize
             else: # Use separate files for compress and decompress benchmarks
-                #shutil.copyfile(srcfile,tmp_decompress_in)
                 separate_files = True
                 decompress_hash = util.hashfile(srcfile_decomp)
                 decompress_origsize = os.path.getsize(srcfile_decomp)
