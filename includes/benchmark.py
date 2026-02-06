@@ -8,6 +8,7 @@
 
 import os
 import sys
+import shutil
 import time
 from collections import namedtuple
 
@@ -24,7 +25,7 @@ def printfile(level, filename, comment=None):
     printnn(f"Level {level}: {filename} {filesize/1024/1024:6.1f} MiB  {filesize:12,} B")
     if comment:
         printnn(f" {comment}")
-    print('')
+    print('\n')
 
 def parse_levels(level_string):
     ''' Parse string containing comma-separated levels or level ranges '''
@@ -158,3 +159,81 @@ def run_test(cfg, level, skipverify):
     print('')
 
     return compsize,comptime,decompsize,decomptime,hashfail
+
+def get_empty_tempfiles(levels):
+    tempfiles = dict()
+    for level in levels:
+        tempfiles[level] = dict()
+        tempfiles[level]['filename_comp'] = None
+        tempfiles[level]['filename_decomp'] = None
+        tempfiles[level]['hash_comp'] = None
+        tempfiles[level]['hash_decomp'] = None
+        tempfiles[level]['origsize_comp'] = None
+        tempfiles[level]['origsize_decomp'] = None
+    return tempfiles
+
+def prepare_singlemode(testconfig, cfgSingle):
+    ''' Single mode, we use the same file for every level, but support separate files for compress/decompress '''
+    cfg = util.dict_to_namedt(testconfig)
+    tempfiles = get_empty_tempfiles(cfg.levels)
+
+    # Same input file for compress + decompress?
+    same_input_file = False
+    if cfg.do_compress and cfgSingle.get('testfile_compress') == cfgSingle.get('testfile_decompress'):
+        same_input_file = True
+
+    printnn("Preparing tempfiles ")
+
+    # Compress
+    if cfg.do_compress:
+        tmp_compress_in = os.path.join(cfg.temp_path, "deflatebench-comp.tmp")
+        srcfile_comp = util.findfile(cfgSingle['testfile_compress'])
+        shutil.copyfile(srcfile_comp,tmp_compress_in)
+        compress_hash = util.hashfile(tmp_compress_in)
+        compress_origsize = os.path.getsize(tmp_compress_in)
+        printnn('.')
+
+        # Set up tempfiles
+        for level in cfg.levels:
+            tempfiles[level]['filename_comp'] = tmp_compress_in
+            tempfiles[level]['hash_comp'] = compress_hash
+            tempfiles[level]['origsize_comp'] = compress_origsize
+
+    # Decompress
+    if cfg.do_decompress:
+        if same_input_file:
+            # Use the same file as compress
+            tmp_decompress_in = None
+            decompress_hash = compress_hash
+            decompress_origsize = compress_origsize
+        else: # Use separate files for compress and decompress benchmarks
+            srcfile_decomp = util.findfile(cfgSingle['testfile_decompress'])
+            decompress_hash = util.hashfile(srcfile_decomp)
+            decompress_origsize = os.path.getsize(srcfile_decomp)
+
+            # Prepare separate compressed files for each level of decompression benchmark
+            for level in cfg.levels:
+                tmp_decompress_in = os.path.join(cfg.temp_path, f"{os.path.basename(srcfile_decomp)}-{level}.gz")
+                util.runcommand(f"{cfg.testtool} -{level} -c {srcfile_decomp}", output=tmp_decompress_in)
+                tempfiles[level]['filename_decomp'] = tmp_decompress_in
+                printnn('.')
+
+        # Set up tempfiles
+        for level in cfg.levels:
+            if same_input_file:
+                tempfiles[level]['filename_decomp'] = tmp_decompress_in
+            tempfiles[level]['hash_decomp'] = decompress_hash
+            tempfiles[level]['origsize_decomp'] = decompress_origsize
+    print()
+
+    # Print a bit of info about the selected levels and files
+    print("Activated single file mode")
+    if not same_input_file:
+        if cfg.do_compress:
+            printfile(','.join(map(str, cfg.levels)), srcfile_comp, 'Compression')
+        if cfg.do_decompress:
+            printfile(','.join(map(str, cfg.levels)), srcfile_decomp, 'Decompression')
+    else:
+        printfile(','.join(map(str, cfg.levels)), srcfile_comp)
+
+    return tempfiles
