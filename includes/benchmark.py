@@ -78,20 +78,20 @@ def run_tests(testconfig):
 
         print(f"Starting run {run} of {cfg.runs}")
         for level in cfg.levels:
-            compsize,comptime,decomptime,hashfail = run_test(cfg, level, skipverify)
+            compsize,comptime,decompsize,decomptime,hashfail = run_test(cfg, level, skipverify)
             if hashfail != 0:
                 print(f"ERROR: level {level} failed crc checking")
             if cfg.do_compress:
                 result_comp[level].append( [compsize,comptime] )
             if cfg.do_decompress:
-                result_decomp[level].append( [compsize,decomptime] )
+                result_decomp[level].append( [decompsize,decomptime] )
 
     return result_comp, result_decomp
 
 def run_test(cfg, level, skipverify):
     ''' Run benchmark and tests for current compression level '''
     # Prepare tempfiles
-    hashfail, compsize, comptime, decomptime = 0, 0, 0, 0
+    hashfail, compsize, decompsize, comptime, decomptime = [0] * 5
     env = util.get_env(True)
     hash_comp = cfg.tempfiles[level]['hash_comp']
     hash_decomp = cfg.tempfiles[level]['hash_decomp']
@@ -151,9 +151,10 @@ def run_test(cfg, level, skipverify):
 
     if cfg.do_compress:
         comppct = float(compsize*100)/cfg.tempfiles[level]['origsize_comp']
-        printnn(f"  comp: {comptime:.4f}s {compsize}B {comppct:.3f}%")
+        printnn(f"   comp: {comptime:.4f}s {compsize}B {comppct:.3f}%")
     if cfg.do_decompress:
-        printnn(f"  decomp: {decomptime:.4f}s {decompsize}B")
+        decomppct = float(decompsize*100)/cfg.tempfiles[level]['origsize_decomp']
+        printnn(f"   decomp: {decomptime:.4f}s {decompsize}B {decomppct:.3f}%")
     print('')
 
-    return compsize,comptime,decomptime,hashfail
+    return compsize,comptime,decompsize,decomptime,hashfail
