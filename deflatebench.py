@@ -174,7 +174,6 @@ def benchmain():
     ''' Main benchmarking function '''
     global do_compress, do_decompress, levels
     tempfiles = dict()
-    separate_files = False
 
     levels = benchmark.parse_levels(cfgRuns['levels'])
     timefile = os.path.join(cfgConfig['temp_path'], 'zlib-time.tmp')
@@ -195,67 +194,23 @@ def benchmain():
 
     printinfo()
 
-    for level in levels:
-        tempfiles[level] = dict()
+    # Prepare testconfig dict
+    testconfig = dict()
+    testconfig['runs'] = cfgRuns['runs']
+    testconfig['levels'] = levels
+    testconfig['skipverify'] = cfgConfig['skipverify']
+    testconfig['timemode'] = timemode
+    testconfig['timefile'] = timefile
+    testconfig['cmdprefix'] = util.cmdprefix
+    testconfig['testtool'] = os.path.realpath(cfgRuns['testtool'])
+    testconfig['do_compress'] = do_compress
+    testconfig['do_decompress'] = do_decompress
+    testconfig['temp_path'] = cfgConfig['temp_path']
 
-    # Single mode, we just reference the same file for every level
+    # Prepare tempfiles according to testmode selection
     if cfgRuns['testmode'] == 'single':
-        # filename_comp
-        if do_compress:
-            tmp_compress_in = os.path.join(cfgConfig['temp_path'], "deflatebench-comp.tmp")
-            srcfile_comp = util.findfile(cfgSingle['testfile_compress'])
-            shutil.copyfile(srcfile_comp,tmp_compress_in)
-            compress_hash = util.hashfile(tmp_compress_in)
-            compress_origsize = os.path.getsize(tmp_compress_in)
-        else:
-            tmp_compress_in = None
-            compress_hash = None
-            compress_origsize = None
-
-        # filename_decomp
-        if do_decompress:
-            tmp_decompress_in = os.path.join(cfgConfig['temp_path'], "deflatebench-decomp.tmp")
-            srcfile_decomp = util.findfile(cfgSingle['testfile_decompress'])
-            if do_compress and cfgSingle['testfile_compress'] == cfgSingle['testfile_decompress']:
-                tmp_decompress_in = None
-                decompress_hash = compress_hash
-                decompress_origsize = compress_origsize
-            else: # Use separate files for compress and decompress benchmarks
-                separate_files = True
-                decompress_hash = util.hashfile(srcfile_decomp)
-                decompress_origsize = os.path.getsize(srcfile_decomp)
-
-                # Prepare compressed files when only benchmarking decompress
-                printnn("Compressing tempfiles for decompression test ")
-                testtool = os.path.realpath(cfgRuns['testtool'])
-                for level in map(str, levels):
-                    tmp_decompress_in = os.path.join(cfgConfig['temp_path'], f"{os.path.basename(srcfile_decomp)}-{level}.gz")
-                    util.runcommand(f"{testtool} -{level} -c {srcfile_decomp}", output=tmp_decompress_in)
-                    tempfiles[level]['filename_decomp'] = tmp_decompress_in
-                    printnn('.')
-        else:
-            tmp_decompress_in = None
-            decompress_hash = None
-            decompress_origsize = None
-
-        print("Activated single file mode")
-        if separate_files:
-            if do_compress:
-                benchmark.printfile(','.join(map(str, levels)), srcfile_comp, 'Compression')
-            if do_decompress:
-                benchmark.printfile(','.join(map(str, levels)), srcfile_decomp, 'Decompression')
-        else:
-            benchmark.printfile(','.join(map(str, levels)), srcfile_comp)
-
-
-        for level in levels:
-            tempfiles[level]['filename_comp'] = tmp_compress_in
-            if not separate_files:
-                tempfiles[level]['filename_decomp'] = tmp_decompress_in
-            tempfiles[level]['hash_comp'] = compress_hash
-            tempfiles[level]['hash_decomp'] = decompress_hash
-            tempfiles[level]['origsize_comp'] = compress_origsize
-            tempfiles[level]['origsize_decomp'] = decompress_origsize
+        tempfiles = benchmark.prepare_singlemode(testconfig, cfgSingle)
+        testconfig['tempfiles'] = tempfiles
     else:
         # Multiple testfiles
         if cfgRuns['testmode'] == 'multi':
