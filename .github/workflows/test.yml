@@ -183,6 +183,17 @@ jobs:
           --runs 2 \
           --trimworst 0
     
+    - name: Test gen mode - different files for compress and decompress
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --gen \
+          --file-compress test-small.txt \
+          --file-decompress test-medium.txt \
+          --levels 1,9 \
+          --runs 2 \
+          --trimworst 0
+    
     - name: Test gen mode - compress only
       run: |
         python3 deflatebench.py \
@@ -204,6 +215,16 @@ jobs:
           --runs 2 \
           --trimworst 0 \
           --benchmark decompress
+    
+    - name: Test gen mode - with level 0
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --gen \
+          --file test-small.txt \
+          --levels 0,1 \
+          --runs 2 \
+          --trimworst 0
     
     # Test multi mode with config file
     - name: Test multi mode with config
@@ -324,6 +345,49 @@ jobs:
         cp test-multi-decompress.conf ~/deflatebench-multi-decompress.conf
         python3 deflatebench.py --profile multi-decompress
     
+    - name: Test multi mode - different files for compress and decompress
+      run: |
+        # Create different test files for multi mode
+        echo "Multi mode compress data" > multi-comp-1.txt
+        for i in {1..100}; do cat multi-comp-1.txt; done > multi-comp-1-full.txt
+        mv multi-comp-1-full.txt multi-comp-1.txt
+        
+        echo "Multi mode decompress data" > multi-decomp-1.txt
+        for i in {1..150}; do cat multi-decomp-1.txt; done > multi-decomp-1-full.txt
+        mv multi-decomp-1-full.txt multi-decomp-1.txt
+        
+        # Create config file for multi mode with different files
+        cat > test-multi-different.conf << 'EOF'
+        [Testruns]
+        runs = 2
+        trimworst = 0
+        levels = "1,9"
+        testmode = "multi"
+        testtool = "minigzip"
+
+        [Config]
+        temp_path = "/tmp"
+        use_perf = false
+        skipverify = false
+        benchmark = "both"
+
+        [Tuning]
+        use_prio = false
+        use_turboctl = false
+        use_cpupower = false
+
+        [Testdata_Multi_Comp]
+        1 = "multi-comp-1.txt"
+        9 = "multi-comp-1.txt"
+
+        [Testdata_Multi_Decomp]
+        1 = "multi-decomp-1.txt"
+        9 = "multi-decomp-1.txt"
+        EOF
+        
+        cp test-multi-different.conf ~/deflatebench-multi-different.conf
+        python3 deflatebench.py --profile multi-different
+    
     - name: Test with level 0
       run: |
         python3 deflatebench.py \
@@ -343,6 +407,40 @@ jobs:
           --levels 0-9 \
           --runs 2 \
           --trimworst 0
+    
+    - name: Test multi mode - with level 0
+      run: |
+        # Create config file for multi mode with level 0
+        cat > test-multi-level0.conf << 'EOF'
+        [Testruns]
+        runs = 2
+        trimworst = 0
+        levels = "0,1"
+        testmode = "multi"
+        testtool = "minigzip"
+
+        [Config]
+        temp_path = "/tmp"
+        use_perf = false
+        skipverify = false
+        benchmark = "both"
+
+        [Tuning]
+        use_prio = false
+        use_turboctl = false
+        use_cpupower = false
+
+        [Testdata_Multi_Comp]
+        0 = "multi-test-1.txt"
+        1 = "multi-test-1.txt"
+
+        [Testdata_Multi_Decomp]
+        0 = "multi-test-1.txt"
+        1 = "multi-test-1.txt"
+        EOF
+        
+        cp test-multi-level0.conf ~/deflatebench-multi-level0.conf
+        python3 deflatebench.py --profile multi-level0
     
     - name: Cleanup
       if: always()
