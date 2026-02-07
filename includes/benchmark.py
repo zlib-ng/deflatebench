@@ -19,13 +19,43 @@ from .cli import printnn
 # Simple usleep function
 usleep = lambda x: time.sleep(x/1000000.0)
 
-def printfile(level, filename, comment=None):
+def print_file(level, filename, comment=''):
     ''' Prints formatted information about file '''
     filesize = os.path.getsize(filename)
-    printnn(f"Level {level}: {filename} {filesize/1024/1024:6.1f} MiB  {filesize:12,} B")
-    if comment:
-        printnn(f" {comment}")
-    print('\n')
+    print(f"Level {level}: {filename} {filesize/1024/1024:6.1f} MiB  {filesize:12,} B  {comment}")
+
+def print_files(cfg, tempfiles, same_input=True, level_files=False):
+    ''' Prints formatted information about files '''
+    if not level_files and (same_input or not cfg.do_compress or not cfg.do_decompress):
+        if cfg.do_compress:
+            filename = tempfiles[cfg.levels[0]]['filename_comp']
+        elif cfg.do_decompress:
+            filename = tempfiles[cfg.levels[0]]['filename_decomp']
+        print_file(cfg.levels, filename)
+    elif not level_files:
+        if cfg.do_compress:
+            filename = tempfiles[cfg.levels[0]]['filename_comp']
+            print_file(cfg.levels, filename, 'Compression')
+        if cfg.do_decompress:
+            filename = tempfiles[cfg.levels[0]]['filename_decomp']
+            print_file(cfg.levels, filename, 'Decompression')
+    else:
+        if cfg.do_compress:
+            for level in cfg.levels:
+                filename = tempfiles[level]['filename_comp']
+                if same_input:
+                    print_file(level, filename)
+                else:
+                    print_file(level, filename, 'Compression')
+
+        if cfg.do_decompress:
+            for level in cfg.levels:
+                filename = tempfiles[level]['filename_decomp']
+                if same_input:
+                    print_file(level, filename)
+                else:
+                    print_file(level, filename, 'Decompression')
+    print()
 
 def parse_levels(level_string):
     ''' Parse string containing comma-separated levels or level ranges '''
@@ -227,14 +257,8 @@ def prepare_singlemode(testconfig, cfgSingle):
     print()
 
     # Print a bit of info about the selected levels and files
+    print_files(cfg, tempfiles, same_input=same_input_file)
     print("Activated single file mode")
-    if not same_input_file:
-        if cfg.do_compress:
-            printfile(','.join(map(str, cfg.levels)), srcfile_comp, 'Compression')
-        if cfg.do_decompress:
-            printfile(','.join(map(str, cfg.levels)), srcfile_decomp, 'Decompression')
-    else:
-        printfile(','.join(map(str, cfg.levels)), srcfile_comp)
 
     return tempfiles
 
@@ -287,14 +311,8 @@ def prepare_genmode(testconfig, cfgGenComp, cfgGenDecomp):
     print()
 
     # Print a bit of info about the selected levels and files
+    print_files(cfg, tempfiles, same_input=same_input_file, level_files=True)
     print("Activated generated file mode")
-    if not same_input_file:
-        if cfg.do_compress:
-            printfile(','.join(map(str, cfg.levels)), util.findfile(cfgGenComp['srcFile']), 'Compression')
-        if cfg.do_decompress:
-            printfile(','.join(map(str, cfg.levels)), util.findfile(cfgGenDecomp['srcFile']), 'Decompression')
-    else:
-        printfile(','.join(map(str, cfg.levels)), util.findfile(cfgGenComp['srcFile']))
 
     return tempfiles
 
@@ -353,18 +371,7 @@ def prepare_multimode(testconfig, cfgMultiComp, cfgMultiDecomp):
     print()
 
     # Print a bit of info about the selected levels and files
-    print("Activated multiple file mode")
-    if not same_input_file:
-        if cfg.do_compress:
-            printfile(','.join(map(str, cfg.levels)),
-                      util.findfile(cfgMultiComp[str(cfg.levels[0])]),
-                      'Compression')
-        if cfg.do_decompress:
-            printfile(','.join(map(str, cfg.levels)),
-                      util.findfile(cfgMultiDecomp[str(cfg.levels[0])]),
-                      'Decompression')
-    else:
-        printfile(','.join(map(str, cfg.levels)),
-                  util.findfile(cfgMultiComp[str(cfg.levels[0])]))
+    print_files(cfg, tempfiles, same_input=same_input_file, level_files=True)
+    print("Activated multi file mode")
 
     return tempfiles
