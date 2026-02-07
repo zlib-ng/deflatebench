@@ -19,7 +19,7 @@ def defconfig():
                             'testtool': 'minigzip' } # minigzip / minideflate
 
     config['Config'] = {'temp_path': tempfile.gettempdir(),
-                        'use_perf': True,
+                        'use_perf': False,
                         'skipverify': False,
                         'benchmark': 'both'} # both / compress / decompress
 

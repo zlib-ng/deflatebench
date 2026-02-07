@@ -19,7 +19,7 @@ python3 -m pip install -r requirements.txt
 
 ### System Tuning
 <sub>PS: Several of these require root or sudo permissions</sub>
-* Supports `perf` or `time` for measuring cputime [Default perf]
+* Supports `perf` or `time` for measuring cputime [Default time]
 * Supports `chrt` to set real-time priority [Default OFF]
 * Supports `nosync` library preloading [Default OFF]
 * Supports `turboctl` for disabling cpu turbo while benchmarking [Default OFF]
