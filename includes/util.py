@@ -93,14 +93,7 @@ def find_tools(timefile, use_prio=True, use_perf=True, use_turboctl=True, use_cp
     perf_works = False
     if use_perf and perf_exe:
         # Test if perf actually works (may fail due to perf_event_paranoid restrictions)
-        try:
-            ret = subprocess.call(
-                [perf_exe, 'stat', '-e', 'cpu-clock:u', '--', 'true'],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-            perf_works = (ret == 0)
-        except Exception:
-            perf_works = False
+        perf_works = (runcommand(f"{perf_exe} stat -e cpu-clock:u -- true", stoponfail=0) == 0)
 
     if use_perf and perf_exe and perf_works:
         print(f"Found {perf_exe}, activating.")
