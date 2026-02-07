@@ -1,0 +1,378 @@
+name: Test deflatebench
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  test-minigzip:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential
+    
+    - name: Clone and build zlib-ng
+      run: |
+        git clone --depth 1 https://github.com/zlib-ng/zlib-ng.git
+        cd zlib-ng
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+          -DZLIB_ENABLE_TESTS=OFF -DWITH_GTEST=OFF
+        cmake --build build --config Release
+        # Copy minigzip to deflatebench directory
+        cp build/minigzip ../minigzip
+        cd ..
+        ls -lh minigzip
+        ./minigzip -h || true
+    
+    - name: Create test data
+      run: |
+        # Create a small test file for quick testing (about 100KB)
+        echo "This is test data for deflatebench compression testing." > test-base.txt
+        for i in {1..1000}; do cat test-base.txt; done > test-small.txt
+        rm test-base.txt
+        
+        # Create a medium test file (about 1MB)
+        for i in {1..10}; do cat test-small.txt; done > test-medium.txt
+        
+        # Verify test files were created
+        ls -lh test-*.txt
+    
+    # Test single mode with various settings
+    - name: Test single mode - compress and decompress
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --single \
+          --file test-small.txt \
+          --levels 1,6,9 \
+          --runs 2 \
+          --trimworst 0
+    
+    - name: Test single mode - compress only
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --single \
+          --file test-small.txt \
+          --levels 1-3 \
+          --runs 2 \
+          --trimworst 0 \
+          --benchmark compress
+    
+    - name: Test single mode - decompress only
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --single \
+          --file test-small.txt \
+          --levels 4-6 \
+          --runs 2 \
+          --trimworst 0 \
+          --benchmark decompress
+    
+    - name: Test single mode - with skipverify
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --single \
+          --file test-small.txt \
+          --levels 5 \
+          --runs 2 \
+          --trimworst 0 \
+          --skipverify
+    
+    - name: Test single mode - different files for compress and decompress
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --single \
+          --file-compress test-small.txt \
+          --file-decompress test-medium.txt \
+          --levels 1,9 \
+          --runs 2 \
+          --trimworst 0
+    
+    - name: Test single mode - level ranges
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --single \
+          --file test-small.txt \
+          --levels 1-4,7-9 \
+          --runs 2 \
+          --trimworst 0
+    
+    - name: Test single mode - with trimworst
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --single \
+          --file test-small.txt \
+          --levels 1,5,9 \
+          --runs 5 \
+          --trimworst 2
+    
+    # Test gen mode with various settings
+    - name: Test gen mode - basic
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --gen \
+          --file test-small.txt \
+          --levels 1,5,9 \
+          --runs 2 \
+          --trimworst 0
+    
+    - name: Test gen mode - compress only
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --gen \
+          --file test-small.txt \
+          --levels 2,6 \
+          --runs 2 \
+          --trimworst 0 \
+          --benchmark compress
+    
+    - name: Test gen mode - decompress only
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --gen \
+          --file test-small.txt \
+          --levels 3,7 \
+          --runs 2 \
+          --trimworst 0 \
+          --benchmark decompress
+    
+    - name: Test gen mode - with different source files
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --gen \
+          --file-compress test-small.txt \
+          --file-decompress test-medium.txt \
+          --levels 1,9 \
+          --runs 2 \
+          --trimworst 0
+    
+    # Test multi mode with config file
+    - name: Test multi mode with config
+      run: |
+        # Create test files for multi mode
+        echo "Multi mode test data level 1" > multi-test-1.txt
+        for i in {1..100}; do cat multi-test-1.txt; done > multi-test-1-full.txt
+        mv multi-test-1-full.txt multi-test-1.txt
+        
+        echo "Multi mode test data level 6" > multi-test-6.txt
+        for i in {1..150}; do cat multi-test-6.txt; done > multi-test-6-full.txt
+        mv multi-test-6-full.txt multi-test-6.txt
+        
+        echo "Multi mode test data level 9" > multi-test-9.txt
+        for i in {1..200}; do cat multi-test-9.txt; done > multi-test-9-full.txt
+        mv multi-test-9-full.txt multi-test-9.txt
+        
+        # Create config file for multi mode
+        cat > test-multi.conf << 'EOF'
+        [Testruns]
+        runs = 2
+        trimworst = 0
+        levels = "1,6,9"
+        testmode = "multi"
+        testtool = "minigzip"
+
+        [Config]
+        temp_path = "/tmp"
+        use_perf = false
+        skipverify = false
+        benchmark = "both"
+
+        [Tuning]
+        use_prio = false
+        use_turboctl = false
+        use_cpupower = false
+
+        [Testdata_Multi_Comp]
+        1 = "multi-test-1.txt"
+        6 = "multi-test-6.txt"
+        9 = "multi-test-9.txt"
+
+        [Testdata_Multi_Decomp]
+        1 = "multi-test-1.txt"
+        6 = "multi-test-6.txt"
+        9 = "multi-test-9.txt"
+        EOF
+        
+        # Copy config and run multi mode test
+        cp test-multi.conf ~/deflatebench-multi.conf
+        python3 deflatebench.py --profile multi
+    
+    - name: Test multi mode - compress only
+      run: |
+        # Create config file for compress-only multi mode
+        cat > test-multi-compress.conf << 'EOF'
+        [Testruns]
+        runs = 2
+        trimworst = 0
+        levels = "1,9"
+        testmode = "multi"
+        testtool = "minigzip"
+
+        [Config]
+        temp_path = "/tmp"
+        use_perf = false
+        skipverify = false
+        benchmark = "compress"
+
+        [Tuning]
+        use_prio = false
+        use_turboctl = false
+        use_cpupower = false
+
+        [Testdata_Multi_Comp]
+        1 = "multi-test-1.txt"
+        9 = "multi-test-9.txt"
+
+        [Testdata_Multi_Decomp]
+        1 = "multi-test-1.txt"
+        9 = "multi-test-9.txt"
+        EOF
+        
+        cp test-multi-compress.conf ~/deflatebench-multi-compress.conf
+        python3 deflatebench.py --profile multi-compress
+    
+    - name: Test with level 0
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --single \
+          --file test-small.txt \
+          --levels 0,1 \
+          --runs 2 \
+          --trimworst 0
+    
+    - name: Test all levels
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --single \
+          --file test-small.txt \
+          --levels 0-9 \
+          --runs 2 \
+          --trimworst 0
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -f test-*.txt multi-*.txt
+        rm -f ~/deflatebench*.conf
+  
+  test-minideflate:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential
+    
+    - name: Clone and build zlib-ng
+      run: |
+        git clone --depth 1 https://github.com/zlib-ng/zlib-ng.git
+        cd zlib-ng
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+          -DZLIB_ENABLE_TESTS=OFF -DWITH_GTEST=OFF
+        cmake --build build --config Release
+        # Copy minideflate to deflatebench directory
+        cp build/minideflate ../minideflate
+        cd ..
+        ls -lh minideflate
+        ./minideflate -h || true
+    
+    - name: Create test data
+      run: |
+        # Create a small test file for quick testing (about 100KB)
+        echo "This is test data for deflatebench compression testing." > test-base.txt
+        for i in {1..1000}; do cat test-base.txt; done > test-small.txt
+        rm test-base.txt
+        
+        # Verify test file was created
+        ls -lh test-small.txt
+    
+    - name: Test single mode with minideflate
+      run: |
+        python3 deflatebench.py \
+          --testtool minideflate \
+          --single \
+          --file test-small.txt \
+          --levels 1,6,9 \
+          --runs 2 \
+          --trimworst 0
+    
+    - name: Test gen mode with minideflate
+      run: |
+        python3 deflatebench.py \
+          --testtool minideflate \
+          --gen \
+          --file test-small.txt \
+          --levels 1,5,9 \
+          --runs 2 \
+          --trimworst 0
+    
+    - name: Test compress only with minideflate
+      run: |
+        python3 deflatebench.py \
+          --testtool minideflate \
+          --single \
+          --file test-small.txt \
+          --levels 1-3 \
+          --runs 2 \
+          --trimworst 0 \
+          --benchmark compress
+    
+    - name: Test decompress only with minideflate
+      run: |
+        python3 deflatebench.py \
+          --testtool minideflate \
+          --single \
+          --file test-small.txt \
+          --levels 4-6 \
+          --runs 2 \
+          --trimworst 0 \
+          --benchmark decompress
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -f test-*.txt
+        rm -f ~/deflatebench*.conf
