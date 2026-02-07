@@ -1,11 +1,6 @@
 name: Test deflatebench
 
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+on: [push, pull_request]
 
 jobs:
   prepare:
