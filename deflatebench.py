@@ -211,45 +211,29 @@ def benchmain():
     if cfgRuns['testmode'] == 'single':
         tempfiles = benchmark.prepare_singlemode(testconfig, cfgSingle)
         testconfig['tempfiles'] = tempfiles
-    else:
+    elif cfgRuns['testmode'] == 'gen':
+        tempfiles = benchmark.prepare_genmode(testconfig, cfgGenComp, cfgGenDecomp)
+        testconfig['tempfiles'] = tempfiles
+    elif cfgRuns['testmode'] == 'multi':
         # Multiple testfiles
-        if cfgRuns['testmode'] == 'multi':
-            print("\nActivated multiple file mode.")
-        else:
-            print(f"\nActivated multiple generated file mode. Source: {cfgGen['srcFile']}")
+        print("\nActivated multiple file mode.")
 
         for level in levels:
             tmp_filename = os.path.join(cfgConfig['temp_path'], f"deflatebench-{level}.tmp")
             tempfiles[level]['filename_comp'] = tmp_filename
             tempfiles[level]['filename_decomp'] = None
 
-            if cfgRuns['testmode'] == 'multi':
-                srcfile = util.findfile(cfgMulti[str(level)])
-                shutil.copyfile(srcfile,tmp_filename)
-                benchmark.printfile(f"{level}", srcfile)
-            else:
-                util.generate_testfile(util.findfile(cfgGen['srcFile']),tmp_filename,cfgGen[str(level)])
-                benchmark.printfile(f"{level}", tmp_filename)
+            srcfile = util.findfile(cfgMultiComp[str(level)])
+            shutil.copyfile(srcfile,tmp_filename)
+            benchmark.printfile(f"{level}", srcfile)
 
             tempfiles[level]['hash'] = util.hashfile(tmp_filename)
             tempfiles[level]['origsize_comp'] = os.path.getsize(tmp_filename)
 
+        testconfig['tempfiles'] = tempfiles
+
     # Tweak system to reduce benchmark variance
     util.cputweak(True)
-
-    # Prepare testconfig dict
-    testconfig = dict()
-    testconfig['runs'] = cfgRuns['runs']
-    testconfig['levels'] = levels
-    testconfig['skipverify'] = cfgConfig['skipverify']
-    testconfig['timemode'] = timemode
-    testconfig['timefile'] = timefile
-    testconfig['cmdprefix'] = util.cmdprefix
-    testconfig['testtool'] = os.path.realpath(cfgRuns['testtool'])
-    testconfig['do_compress'] = do_compress
-    testconfig['do_decompress'] = do_decompress
-    testconfig['tempfiles'] = tempfiles
-    testconfig['temp_path'] = cfgConfig['temp_path']
 
     # Run tests and record results
     result_comp,result_decomp = benchmark.run_tests(testconfig)
@@ -280,7 +264,7 @@ def benchmain():
 
 def main():
     ''' Main function handles command-line arguments and loading the correct config '''
-    global cfgRuns,cfgConfig,cfgTuning,cfgGen,cfgSingle,cfgMulti
+    global cfgRuns,cfgConfig,cfgTuning,cfgSingle,cfgGenComp,cfgGenDecomp,cfgMultiComp,cfgMultiDecomp
 
     parser = argparse.ArgumentParser(description='deflatebench - A zlib-ng benchmarking utility. Please see config file for more options.')
     parser.add_argument('-p','--profile', help='Load config profile from config file: ~/deflatebench-[PROFILE].conf')
@@ -292,8 +276,8 @@ def main():
     parser.add_argument('-m','--multi', help='Activate testmode "Multi".', action='store_true')
     parser.add_argument('-g','--gen', help='Activate testmode "Generate".', action='store_true')
     parser.add_argument('-f','--file', help='Path to test file to use for both comp/decomp (Single/Gen mode only).', action='store')
-    parser.add_argument('-x','--file-compress', help='Path to test file to use for compress (Single mode only).', action='store', dest='file_comp')
-    parser.add_argument('-y','--file-decompress', help='Path to test file to use for decompress (Single mode only).', action='store', dest='file_decomp')
+    parser.add_argument('-x','--file-compress', help='Path to test file to use for compress (Single/Gen mode only).', action='store', dest='file_comp')
+    parser.add_argument('-y','--file-decompress', help='Path to test file to use for decompress (Single/Gen mode only).', action='store', dest='file_decomp')
     parser.add_argument('--testtool', help='Path to test tool.', action='store')
     parser.add_argument('--benchmark', choices=['both','compress','decompress'], help='By default, benchmark both compress and decompress.', action='store')
     parser.add_argument('--skipverify', help='Skip verifying compressed files with system gzip.', action='store_true')
@@ -329,9 +313,11 @@ def main():
     cfgRuns = cfg['Testruns']
     cfgConfig = cfg['Config']
     cfgTuning = cfg['Tuning']
-    cfgGen = cfg['Testdata_Gen']
     cfgSingle = cfg['Testdata_Single']
-    cfgMulti = cfg['Testdata_Multi']
+    cfgGenComp = cfg['Testdata_Gen_Comp']
+    cfgGenDecomp = cfg['Testdata_Gen_Decomp']
+    cfgMultiComp = cfg['Testdata_Multi_Comp']
+    cfgMultiDecomp = cfg['Testdata_Multi_Decomp']
 
     util.init(cfgConfig, cfgTuning)
 
@@ -382,13 +368,16 @@ def main():
     if args.file:
         cfgSingle['testfile_compress'] = args.file
         cfgSingle['testfile_decompress'] = args.file
-        cfgGen['srcFile'] = args.file
+        cfgGenComp['srcFile'] = args.file
+        cfgGenDecomp['srcFile'] = args.file
 
     if args.file_comp:
         cfgSingle['testfile_compress'] = args.file_comp
+        cfgGenComp['srcFile'] = args.file_comp
 
     if args.file_decomp:
         cfgSingle['testfile_decompress'] = args.file_decomp
+        cfgGenDecomp['srcFile'] = args.file_decomp
 
     if args.testtool:
         cfgRuns['testtool'] = args.testtool
