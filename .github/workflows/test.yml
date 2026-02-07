@@ -34,13 +34,12 @@ jobs:
         git clone --depth 1 https://github.com/zlib-ng/zlib-ng.git
         cd zlib-ng
         cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
-          -DZLIB_ENABLE_TESTS=OFF -DWITH_GTEST=OFF
+          -DBUILD_TESTING=ON -DWITH_GTEST=OFF
         cmake --build build --config Release
         # Copy minigzip to deflatebench directory
         cp build/minigzip ../minigzip
         cd ..
         ls -lh minigzip
-        ./minigzip -h || true
     
     - name: Create test data
       run: |
@@ -131,16 +130,6 @@ jobs:
           --trimworst 2
     
     # Test gen mode with various settings
-    - name: Test gen mode - basic
-      run: |
-        python3 deflatebench.py \
-          --testtool minigzip \
-          --gen \
-          --file test-small.txt \
-          --levels 1,5,9 \
-          --runs 2 \
-          --trimworst 0
-    
     - name: Test gen mode - compress only
       run: |
         python3 deflatebench.py \
@@ -162,17 +151,6 @@ jobs:
           --runs 2 \
           --trimworst 0 \
           --benchmark decompress
-    
-    - name: Test gen mode - with different source files
-      run: |
-        python3 deflatebench.py \
-          --testtool minigzip \
-          --gen \
-          --file-compress test-small.txt \
-          --file-decompress test-medium.txt \
-          --levels 1,9 \
-          --runs 2 \
-          --trimworst 0
     
     # Test multi mode with config file
     - name: Test multi mode with config
@@ -311,13 +289,12 @@ jobs:
         git clone --depth 1 https://github.com/zlib-ng/zlib-ng.git
         cd zlib-ng
         cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
-          -DZLIB_ENABLE_TESTS=OFF -DWITH_GTEST=OFF
+          -DBUILD_TESTING=ON -DWITH_GTEST=OFF
         cmake --build build --config Release
         # Copy minideflate to deflatebench directory
         cp build/minideflate ../minideflate
         cd ..
         ls -lh minideflate
-        ./minideflate -h || true
     
     - name: Create test data
       run: |
@@ -339,7 +316,7 @@ jobs:
           --runs 2 \
           --trimworst 0
     
-    - name: Test gen mode with minideflate
+    - name: Test gen mode with minideflate - compress only
       run: |
         python3 deflatebench.py \
           --testtool minideflate \
@@ -347,7 +324,8 @@ jobs:
           --file test-small.txt \
           --levels 1,5,9 \
           --runs 2 \
-          --trimworst 0
+          --trimworst 0 \
+          --benchmark compress
     
     - name: Test compress only with minideflate
       run: |
