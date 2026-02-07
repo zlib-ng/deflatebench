@@ -10,6 +10,8 @@ on:
 jobs:
   test-minigzip:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
     - uses: actions/checkout@v4
@@ -265,6 +267,8 @@ jobs:
   
   test-minideflate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
     - uses: actions/checkout@v4
