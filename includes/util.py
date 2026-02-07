@@ -107,9 +107,6 @@ def find_tools(timefile, use_prio=True, use_perf=True, use_turboctl=True, use_cp
         cmdprefix += f" {perf_exe} stat -e cpu-clock:u -o '{timefile}' -- "
         mode = 'perf'
     else:
-        # Ensure use_perf is disabled so parse_timefile uses the correct format
-        cfgConfig['use_perf'] = False
-
         # Fallback to 'time' if found
         if time_exe:
             print(f"Found {time_exe}, activating.")
@@ -196,9 +193,9 @@ def generate_testfile(sourcefile,destfile,minsize):
             dst.write(data)
     dst.close()
 
-def parse_timefile(filen):
+def parse_timefile(filen, timemode):
     ''' Parse output from perf or time '''
-    if cfgConfig['use_perf']:
+    if timemode == 'perf':
         with open(filen) as f:
             content = f.readlines()
         for line in content:

@@ -87,7 +87,7 @@ def run_timed(command, env, timefile, timemode, outfile):
     if timemode == 'python':
         return time.perf_counter() - starttime
 
-    return util.parse_timefile(timefile)
+    return util.parse_timefile(timefile, timemode)
 
 def run_tests(testconfig):
     cfg = util.dict_to_namedt(testconfig)
