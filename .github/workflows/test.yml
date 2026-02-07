@@ -173,6 +173,16 @@ jobs:
           --trimworst 2
     
     # Test gen mode with various settings
+    - name: Test gen mode - both compress and decompress
+      run: |
+        python3 deflatebench.py \
+          --testtool minigzip \
+          --gen \
+          --file test-small.txt \
+          --levels 1,5,9 \
+          --runs 2 \
+          --trimworst 0
+    
     - name: Test gen mode - compress only
       run: |
         python3 deflatebench.py \
@@ -279,6 +289,40 @@ jobs:
         
         cp test-multi-compress.conf ~/deflatebench-multi-compress.conf
         python3 deflatebench.py --profile multi-compress
+    
+    - name: Test multi mode - decompress only
+      run: |
+        # Create config file for decompress-only multi mode
+        cat > test-multi-decompress.conf << 'EOF'
+        [Testruns]
+        runs = 2
+        trimworst = 0
+        levels = "1,9"
+        testmode = "multi"
+        testtool = "minigzip"
+
+        [Config]
+        temp_path = "/tmp"
+        use_perf = false
+        skipverify = false
+        benchmark = "decompress"
+
+        [Tuning]
+        use_prio = false
+        use_turboctl = false
+        use_cpupower = false
+
+        [Testdata_Multi_Comp]
+        1 = "multi-test-1.txt"
+        9 = "multi-test-9.txt"
+
+        [Testdata_Multi_Decomp]
+        1 = "multi-test-1.txt"
+        9 = "multi-test-9.txt"
+        EOF
+        
+        cp test-multi-decompress.conf ~/deflatebench-multi-decompress.conf
+        python3 deflatebench.py --profile multi-decompress
     
     - name: Test with level 0
       run: |
