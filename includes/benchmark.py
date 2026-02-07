@@ -241,16 +241,7 @@ def prepare_singlemode(testconfig, cfgSingle):
 def prepare_genmode(testconfig, cfgGenComp, cfgGenDecomp):
     ''' Gen mode, generate per-level tempfiles. Support separate input files for compress/decompress. '''
     cfg = util.dict_to_namedt(testconfig)
-
-    tempfiles = dict()
-    for level in cfg.levels:
-        tempfiles[level] = dict()
-        tempfiles[level]['filename_comp'] = None
-        tempfiles[level]['filename_decomp'] = None
-        tempfiles[level]['hash_comp'] = None
-        tempfiles[level]['hash_decomp'] = None
-        tempfiles[level]['origsize_comp'] = None
-        tempfiles[level]['origsize_decomp'] = None
+    tempfiles = get_empty_tempfiles(cfg.levels)
 
     # Same input files for compress + decompress?
     same_input_file = False
@@ -304,5 +295,76 @@ def prepare_genmode(testconfig, cfgGenComp, cfgGenDecomp):
             printfile(','.join(map(str, cfg.levels)), util.findfile(cfgGenDecomp['srcFile']), 'Decompression')
     else:
         printfile(','.join(map(str, cfg.levels)), util.findfile(cfgGenComp['srcFile']))
+
+    return tempfiles
+
+def prepare_multimode(testconfig, cfgMultiComp, cfgMultiDecomp):
+    ''' Multi mode, use per-level input files. Support separate input files for compress/decompress. '''
+    cfg = util.dict_to_namedt(testconfig)
+    tempfiles = get_empty_tempfiles(cfg.levels)
+
+    # Same input files for compress + decompress?
+    if cfg.do_compress and cfg.do_decompress:
+        same_input_file = True
+        for level in cfg.levels:
+            if cfgMultiDecomp[str(level)] and cfgMultiComp[str(level)] and cfgMultiDecomp[str(level)] != cfgMultiComp[str(level)]:
+                same_input_file = False
+    else:
+        same_input_file = False
+
+    printnn("Preparing tempfiles ")
+
+    # Compress
+    if cfg.do_compress:
+        for level in cfg.levels:
+            srcfile = util.findfile(cfgMultiComp[str(level)])
+            tmp_comp = os.path.join(cfg.temp_path, f"deflatebench-comp-{level}.tmp")
+            shutil.copyfile(srcfile, tmp_comp)
+
+            tempfiles[level]['filename_comp'] = tmp_comp
+            tempfiles[level]['hash_comp'] = util.hashfile(tmp_comp)
+            tempfiles[level]['origsize_comp'] = os.path.getsize(tmp_comp)
+            printnn('.')
+
+    # Decompress
+    if cfg.do_decompress:
+        for level in cfg.levels:
+            if (same_input_file):
+                # Reuse compression input for this level
+                tempfiles[level]['filename_decomp'] = None
+                tempfiles[level]['hash_decomp'] = tempfiles[level]['hash_comp']
+                tempfiles[level]['origsize_decomp'] = tempfiles[level]['origsize_comp']
+            else:
+                # Separate input file
+                srcfile = util.findfile(cfgMultiDecomp[str(level)])
+
+                tmp_raw = os.path.join(cfg.temp_path, f"deflatebench-decomp-{level}.tmp")
+                shutil.copyfile(srcfile, tmp_raw)
+
+                tmp_decomp = os.path.join(cfg.temp_path, f"deflatebench-decomp-{level}.gz")
+                util.runcommand(f"{cfg.testtool} -{level} -c {tmp_raw}", output=tmp_decomp)
+
+                tempfiles[level]['filename_decomp'] = tmp_decomp
+                tempfiles[level]['hash_decomp'] = util.hashfile(tmp_raw)
+                tempfiles[level]['origsize_decomp'] = os.path.getsize(tmp_raw)
+                os.unlink(tmp_raw)
+
+            printnn('.')
+    print()
+
+    # Print a bit of info about the selected levels and files
+    print("Activated multiple file mode")
+    if not same_input_file:
+        if cfg.do_compress:
+            printfile(','.join(map(str, cfg.levels)),
+                      util.findfile(cfgMultiComp[str(cfg.levels[0])]),
+                      'Compression')
+        if cfg.do_decompress:
+            printfile(','.join(map(str, cfg.levels)),
+                      util.findfile(cfgMultiDecomp[str(cfg.levels[0])]),
+                      'Decompression')
+    else:
+        printfile(','.join(map(str, cfg.levels)),
+                  util.findfile(cfgMultiComp[str(cfg.levels[0])]))
 
     return tempfiles
