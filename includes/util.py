@@ -90,11 +90,26 @@ def find_tools(timefile, use_prio=True, use_perf=True, use_turboctl=True, use_cp
             print("Warning: Failed to find 'chrt' or 'nice', cpu priority not set.")
 
     # Detect 'perf'
+    perf_works = False
     if use_perf and perf_exe:
+        # Test if perf actually works (may fail due to perf_event_paranoid restrictions)
+        try:
+            ret = subprocess.call(
+                [perf_exe, 'stat', '-e', 'cpu-clock:u', '--', 'true'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            perf_works = (ret == 0)
+        except Exception:
+            perf_works = False
+
+    if use_perf and perf_exe and perf_works:
         print(f"Found {perf_exe}, activating.")
         cmdprefix += f" {perf_exe} stat -e cpu-clock:u -o '{timefile}' -- "
         mode = 'perf'
     else:
+        # Ensure use_perf is disabled so parse_timefile uses the correct format
+        cfgConfig['use_perf'] = False
+
         # Fallback to 'time' if found
         if time_exe:
             print(f"Found {time_exe}, activating.")
@@ -102,9 +117,12 @@ def find_tools(timefile, use_prio=True, use_perf=True, use_turboctl=True, use_cp
             cmdprefix += f" {time_exe} -o '{timefile}' -f '{timeformat}' -- "
             mode = 'time'
 
-        if use_perf is True and time_exe:
+        if use_perf and perf_exe and not perf_works:
+            print("Warning: 'perf' was found but lacks access to performance events, falling back to less accurate 'time' for cputime measurements.")
+        elif use_perf and not perf_exe and time_exe:
             print("Warning: Failed to find 'perf' util, falling back to less accurate 'time' for cputime measurements.")
-        else:
+
+        if not time_exe:
             print("Warning: Failed to find 'perf' and 'time' util, unable to accurately measure elapsed cputime.")
             mode = 'python'
 
