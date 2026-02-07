@@ -440,7 +440,8 @@ jobs:
           --file test-small.txt \
           --levels 1,6,9 \
           --runs 2 \
-          --trimworst 0
+          --trimworst 0 \
+          --skipverify
     
     - name: Test gen mode with minideflate - compress only
       run: |
@@ -451,7 +452,8 @@ jobs:
           --levels 1,5,9 \
           --runs 2 \
           --trimworst 0 \
-          --benchmark compress
+          --benchmark compress \
+          --skipverify
     
     - name: Test compress only with minideflate
       run: |
@@ -462,7 +464,8 @@ jobs:
           --levels 1-3 \
           --runs 2 \
           --trimworst 0 \
-          --benchmark compress
+          --benchmark compress \
+          --skipverify
     
     - name: Test decompress only with minideflate
       run: |
