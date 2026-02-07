@@ -237,3 +237,72 @@ def prepare_singlemode(testconfig, cfgSingle):
         printfile(','.join(map(str, cfg.levels)), srcfile_comp)
 
     return tempfiles
+
+def prepare_genmode(testconfig, cfgGenComp, cfgGenDecomp):
+    ''' Gen mode, generate per-level tempfiles. Support separate input files for compress/decompress. '''
+    cfg = util.dict_to_namedt(testconfig)
+
+    tempfiles = dict()
+    for level in cfg.levels:
+        tempfiles[level] = dict()
+        tempfiles[level]['filename_comp'] = None
+        tempfiles[level]['filename_decomp'] = None
+        tempfiles[level]['hash_comp'] = None
+        tempfiles[level]['hash_decomp'] = None
+        tempfiles[level]['origsize_comp'] = None
+        tempfiles[level]['origsize_decomp'] = None
+
+    # Same input files for compress + decompress?
+    same_input_file = False
+    if cfg.do_compress and cfg.do_decompress:
+        if cfgGenDecomp['srcFile'] is None or cfgGenComp['srcFile'] == cfgGenDecomp['srcFile']:
+            same_input_file = True
+
+    printnn("Generating tempfiles ")
+
+    # Compress
+    if cfg.do_compress:
+        for level in cfg.levels:
+            tmp_comp = os.path.join(cfg.temp_path, f"deflatebench-comp-{level}.tmp")
+            util.generate_testfile(util.findfile(cfgGenComp['srcFile']), tmp_comp, cfgGenComp[str(level)])
+
+            tempfiles[level]['filename_comp'] = tmp_comp
+            tempfiles[level]['hash_comp'] = util.hashfile(tmp_comp)
+            tempfiles[level]['origsize_comp'] = os.path.getsize(tmp_comp)
+            printnn('.')
+
+    # Decompress
+    if cfg.do_decompress:
+        for level in cfg.levels:
+            if same_input_file:
+                # Reuse compression input for this level
+                tempfiles[level]['filename_decomp'] = None
+                tempfiles[level]['hash_decomp'] = tempfiles[level]['hash_comp']
+                tempfiles[level]['origsize_decomp'] = tempfiles[level]['origsize_comp']
+            else:
+                # Generate separate input file
+                tmp_raw = os.path.join(cfg.temp_path, f"deflatebench-decomp-{level}.tmp")
+                util.generate_testfile(util.findfile(cfgGenDecomp['srcFile']), tmp_raw, cfgGenDecomp[str(level)])
+
+                # Compress per-level file
+                tmp_decomp = os.path.join(cfg.temp_path, f"deflatebench-decomp-{level}.gz")
+                util.runcommand(f"{cfg.testtool} -{level} -c {tmp_raw}", output=tmp_decomp)
+
+                tempfiles[level]['filename_decomp'] = tmp_decomp
+                tempfiles[level]['hash_decomp'] = util.hashfile(tmp_raw)
+                tempfiles[level]['origsize_decomp'] = os.path.getsize(tmp_raw)
+                os.unlink(tmp_raw)
+            printnn('.')
+    print()
+
+    # Print a bit of info about the selected levels and files
+    print("Activated generated file mode")
+    if not same_input_file:
+        if cfg.do_compress:
+            printfile(','.join(map(str, cfg.levels)), util.findfile(cfgGenComp['srcFile']), 'Compression')
+        if cfg.do_decompress:
+            printfile(','.join(map(str, cfg.levels)), util.findfile(cfgGenDecomp['srcFile']), 'Decompression')
+    else:
+        printfile(','.join(map(str, cfg.levels)), util.findfile(cfgGenComp['srcFile']))
+
+    return tempfiles

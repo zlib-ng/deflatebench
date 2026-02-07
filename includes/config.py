@@ -35,30 +35,55 @@ def defconfig():
     config['Testdata_Single'] = { 'testfile_compress': 'silesia.tar',
                                   'testfile_decompress': 'silesia.tar' }
 
-    # Multiple testfiles
-    config['Testdata_Multi'] = {'0': 'testfile-500M',
-                                '1': 'testfile-300M',
-                                '2': 'testfile-150M',
-                                '3': 'testfile-125M',
-                                '4': 'testfile-100M',
-                                '5': 'testfile-85M',
-                                '6': 'testfile-75M',
-                                '7': 'testfile-40M',
-                                '8': 'testfile-20M',
-                                '9': 'testfile-20M' }
+    # Multiple testfiles (compression)
+    config['Testdata_Multi_Comp'] = {'0': 'testfile-500M',
+                                     '1': 'testfile-300M',
+                                     '2': 'testfile-150M',
+                                     '3': 'testfile-125M',
+                                     '4': 'testfile-100M',
+                                     '5': 'testfile-85M',
+                                     '6': 'testfile-75M',
+                                     '7': 'testfile-40M',
+                                     '8': 'testfile-20M',
+                                     '9': 'testfile-20M' }
 
-    # Generated testfiles
-    config['Testdata_Gen'] =  { 'srcFile': 'silesia-small.tar',
-                                '0': 500,
-                                '1': 270,
-                                '2': 135,
-                                '3': 105,
-                                '4': 90,
-                                '5': 90,
-                                '6': 75,
-                                '7': 60,
-                                '8': 45,
-                                '9': 45 }
+    # Multiple testfiles (decompression)
+    config['Testdata_Multi_Decomp'] = {'0': 'testfile-500M',
+                                       '1': 'testfile-300M',
+                                       '2': 'testfile-150M',
+                                       '3': 'testfile-125M',
+                                       '4': 'testfile-100M',
+                                       '5': 'testfile-85M',
+                                       '6': 'testfile-75M',
+                                       '7': 'testfile-40M',
+                                       '8': 'testfile-20M',
+                                       '9': 'testfile-20M' }
+
+    # Generated testfiles (compression)
+    config['Testdata_Gen_Comp'] =  { 'srcFile': 'silesia-small.tar',
+                                     '0': 500,
+                                     '1': 270,
+                                     '2': 135,
+                                     '3': 105,
+                                     '4': 90,
+                                     '5': 90,
+                                     '6': 75,
+                                     '7': 60,
+                                     '8': 45,
+                                     '9': 45 }
+
+    # Generated testfiles (decompression)
+    config['Testdata_Gen_Decomp'] =  { 'srcFile': 'silesia-small.tar',
+                                       '0': 1000,
+                                       '1': 530,
+                                       '2': 270,
+                                       '3': 210,
+                                       '4': 180,
+                                       '5': 180,
+                                       '6': 150,
+                                       '7': 120,
+                                       '8': 90,
+                                       '9': 90 }
     return config
 
 def parseconfig(file):
@@ -80,10 +105,17 @@ def mergeconfig(src, chg):
         src['Config'].update(chg['Config'])
     if 'Tuning' in chg:
         src['Tuning'].update(chg['Tuning'])
-    if 'Testdata_Gen' in chg:
-        src['Testdata_Gen'].update(chg['Testdata_Gen'])
+
     if 'Testdata_Single' in chg:
         src['Testdata_Single'].update(chg['Testdata_Single'])
-    if 'Testdata_Multi' in chg:
-        src['Testdata_Multi'].update(chg['Testdata_Multi'])
+
+    if 'Testdata_Gen_Comp' in chg:
+        src['Testdata_Gen_Comp'].update(chg['Testdata_Gen_Comp'])
+    if 'Testdata_Gen_Decomp' in chg:
+        src['Testdata_Gen_Decomp'].update(chg['Testdata_Gen_Decomp'])
+
+    if 'Testdata_Multi_Comp' in chg:
+        src['Testdata_Multi_Comp'].update(chg['Testdata_Multi_Comp'])
+    if 'Testdata_Multi_Decomp' in chg:
+        src['Testdata_Multi_Decomp'].update(chg['Testdata_Multi_Decomp'])
     return src
