@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-minigzip:
+  prepare:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -38,10 +38,11 @@ jobs:
         cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
           -DBUILD_TESTING=ON -DWITH_GTEST=OFF
         cmake --build build --config Release
-        # Copy minigzip to deflatebench directory
+        # Copy both minigzip and minideflate to deflatebench directory
         cp build/minigzip ../minigzip
+        cp build/minideflate ../minideflate
         cd ..
-        ls -lh minigzip
+        ls -lh minigzip minideflate
     
     - name: Create test data
       run: |
@@ -55,6 +56,46 @@ jobs:
         
         # Verify test files were created
         ls -lh test-*.txt
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-binaries-and-data
+        path: |
+          minigzip
+          minideflate
+          test-*.txt
+          deflatebench.py
+          includes/
+          requirements.txt
+        retention-days: 1
+
+  test-minigzip:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: test-binaries-and-data
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Verify downloaded files
+      run: |
+        ls -lh minigzip test-*.txt
+        chmod +x minigzip
     
     # Test single mode with various settings
     - name: Test single mode - compress and decompress
@@ -266,12 +307,16 @@ jobs:
         rm -f ~/deflatebench*.conf
   
   test-minideflate:
+    needs: prepare
     runs-on: ubuntu-latest
     permissions:
       contents: read
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: test-binaries-and-data
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -283,32 +328,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Install build dependencies
+    - name: Verify downloaded files
       run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake build-essential
-    
-    - name: Clone and build zlib-ng
-      run: |
-        git clone --depth 1 https://github.com/zlib-ng/zlib-ng.git
-        cd zlib-ng
-        cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
-          -DBUILD_TESTING=ON -DWITH_GTEST=OFF
-        cmake --build build --config Release
-        # Copy minideflate to deflatebench directory
-        cp build/minideflate ../minideflate
-        cd ..
-        ls -lh minideflate
-    
-    - name: Create test data
-      run: |
-        # Create a small test file for quick testing (about 100KB)
-        echo "This is test data for deflatebench compression testing." > test-base.txt
-        for i in {1..1000}; do cat test-base.txt; done > test-small.txt
-        rm test-base.txt
-        
-        # Verify test file was created
-        ls -lh test-small.txt
+        ls -lh minideflate test-small.txt
+        chmod +x minideflate
     
     - name: Test single mode with minideflate
       run: |
