@@ -210,27 +210,11 @@ def benchmain():
     # Prepare tempfiles according to testmode selection
     if cfgRuns['testmode'] == 'single':
         tempfiles = benchmark.prepare_singlemode(testconfig, cfgSingle)
-        testconfig['tempfiles'] = tempfiles
     elif cfgRuns['testmode'] == 'gen':
         tempfiles = benchmark.prepare_genmode(testconfig, cfgGenComp, cfgGenDecomp)
-        testconfig['tempfiles'] = tempfiles
     elif cfgRuns['testmode'] == 'multi':
-        # Multiple testfiles
-        print("\nActivated multiple file mode.")
-
-        for level in levels:
-            tmp_filename = os.path.join(cfgConfig['temp_path'], f"deflatebench-{level}.tmp")
-            tempfiles[level]['filename_comp'] = tmp_filename
-            tempfiles[level]['filename_decomp'] = None
-
-            srcfile = util.findfile(cfgMultiComp[str(level)])
-            shutil.copyfile(srcfile,tmp_filename)
-            benchmark.printfile(f"{level}", srcfile)
-
-            tempfiles[level]['hash'] = util.hashfile(tmp_filename)
-            tempfiles[level]['origsize_comp'] = os.path.getsize(tmp_filename)
-
-        testconfig['tempfiles'] = tempfiles
+        tempfiles = benchmark.prepare_multimode(testconfig, cfgMultiComp, cfgMultiDecomp)
+    testconfig['tempfiles'] = tempfiles
 
     # Tweak system to reduce benchmark variance
     util.cputweak(True)
@@ -357,11 +341,8 @@ def main():
     if args.file and (args.file_comp or args.file_decomp):
         print("Error, parameter '--file' conflicts with parameters '--file-compress' and '--file-decompress'")
         sys.exit(1)
-    elif (args.file_comp or args.file_decomp) and cfgRuns['testmode'] != 'single':
-        print("Error, parameters '--file-compress' and '--file-decompress' are only available with '--single'")
-        sys.exit(1)
-    elif args.file and cfgRuns['testmode'] == 'multi':
-        print("Error, parameter '--file' is not compatible with '--multi', please use config file.")
+    elif (args.file or args.file_comp or args.file_decomp) and cfgRuns['testmode'] == 'multi':
+        print("Error, parameters '--file', '--file-compress' and '--file-decompress' are not compatible with '--multi', please use config file.")
         sys.exit(1)
 
     # Handle testfile selection
