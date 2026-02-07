@@ -48,13 +48,10 @@ def print_files(cfg, tempfiles, same_input=True, level_files=False):
                 else:
                     print_file(level, filename, 'Compression')
 
-        if cfg.do_decompress:
+        if cfg.do_decompress and not same_input:
             for level in cfg.levels:
                 filename = tempfiles[level]['filename_decomp']
-                if same_input:
-                    print_file(level, filename)
-                else:
-                    print_file(level, filename, 'Decompression')
+                print_file(level, filename, 'Decompression')
     print()
 
 def parse_levels(level_string):
@@ -90,7 +87,7 @@ def run_timed(command, env, timefile, timemode, outfile):
     if timemode == 'python':
         return time.perf_counter() - starttime
 
-    return util.parse_timefile(timefile)
+    return util.parse_timefile(timefile, timemode)
 
 def run_tests(testconfig):
     cfg = util.dict_to_namedt(testconfig)
