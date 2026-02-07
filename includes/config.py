@@ -24,7 +24,7 @@ def defconfig():
                         'benchmark': 'both'} # both / compress / decompress
 
     ## CPU related settings
-    config['Tuning'] = {'use_prio': True,
+    config['Tuning'] = {'use_prio': False,
                         'use_turboctl': True,
                         'use_cpupower': False,
                         'cpu_std_minspeed': 1000,
